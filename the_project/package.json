@@ -1,0 +1,11 @@
+{
+  "name": "the-project",
+  "version": "1.0.2",
+  "description": "A web server that outputs \"Server started in port NNNN\".",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Anas Fajoui",
+  "license": "ISC"
+}
