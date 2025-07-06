@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-output-dep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outputlogger
+  template:
+    metadata:
+      labels:
+        app: outputlogger
+    spec:
+      containers:
+        - name: outputlogger
+          image: fajouianas/devops-with-kubernetes:1.03
