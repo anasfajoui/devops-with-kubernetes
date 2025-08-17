@@ -1,12 +1,34 @@
-const http = require('http');
+const Koa = require('koa')
+const app = new Koa()
 
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
-    res.writeHead(200, {'Content-Type': 'text/plain'});
-    res.end('Hello from the web server!\n');
+const createRandomString = () => Math.random().toString(36).substr(2, 6)
+
+const startingString = createRandomString()
+
+app.use(async ctx => {
+    if (ctx.path.includes('favicon.ico')) return
+
+    const stringNow = createRandomString()
+    console.log('--------------------')
+    console.log(`Responding with ${stringNow}`)
+
+    ctx.type = 'html'
+    ctx.body = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>The Project Server</title>
+        </head>
+        <body>
+            <h1>Application ${startingString}</h1>
+            <p>Request: ${stringNow}</p>
+        </body>
+        </html>
+    `
 });
 
-server.listen(PORT, () => {
-    console.log(`Server started in port ${PORT}`);
-});
+app.listen(PORT)
+
+console.log(`Started with ${startingString}, listening on port ${PORT}`)

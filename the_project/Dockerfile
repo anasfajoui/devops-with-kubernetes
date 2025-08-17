@@ -2,9 +2,9 @@ FROM node:alpine
 
 WORKDIR /usr/src/app
 
-COPY package* ./
+COPY package*.json ./
 
-RUN npm ci
+RUN npm ci --only=production
 
 COPY . ./
 

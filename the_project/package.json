@@ -1,11 +1,14 @@
 {
   "name": "the-project",
-  "version": "1.0.4",
-  "description": "A web server that outputs \"Server started in port NNNN\".",
+  "version": "1.0.5",
+  "description": "A web server that outputs two hashes.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "author": "Anas Fajoui",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "koa": "^2.15.0"
+  }
 }
