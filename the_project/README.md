@@ -1,7 +1,5 @@
-## The project: Step 3
+## The project: Step 4
 
-Deploy with `kubectl apply -f https://raw.githubusercontent.com/anasfajoui/devops-with-kubernetes/1.5/the_project/manifests/deployment.yaml`.
+Deploy with `kubectl apply -f manifests`
 
-Then port forward with `kubectl port-forward <project-dep-xxx-xxx> 3003:3000`.
-
-App should be accessible through [http://localhost:3003/](http://localhost:3003/).
+App should be accessible through [http://localhost:8082/](http://localhost:8082/). the localhost:8082 port has to be forwarded to port 30080 of a node inside the cluster.
