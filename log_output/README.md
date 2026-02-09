@@ -1,3 +1,5 @@
-## Log output app: Declarative approach
+## Log output: External access with Ingress
 
-Deploy with `kubectl apply -f https://raw.githubusercontent.com/anasfajoui/devops-with-kubernetes/1.3/log_output/manifests/deployment.yaml`
+Deploy with `kubectl apply -f manifests`
+
+App should be accessible through [http://localhost:8081/](http://localhost:8081/). the localhost:8081 port has to be forwarded to port 80 of the k3d loadbalancer inside the cluster.

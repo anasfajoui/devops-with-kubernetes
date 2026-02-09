@@ -12,4 +12,3 @@ spec:
       protocol: TCP
       port: 1234
       targetPort: 3000
-      
