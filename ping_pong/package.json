@@ -1,0 +1,11 @@
+{
+  "name": "ping-pong",
+  "version": "1.0.9",
+  "description": "A counter service that responds with pong and a request index.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Anas Fajoui",
+  "license": "ISC"
+}
