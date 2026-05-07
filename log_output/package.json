@@ -1,10 +1,12 @@
 {
   "name": "log-output",
-  "version": "1.0.7",
-  "description": "Outputs random string and timestamp every 5 seconds.",
+  "version": "1.1.0",
+  "description": "Writer appends timestamp and random string every 5s; reader serves the shared log over HTTP.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "start:reader": "node index.js",
+    "start:writer": "node writer.js"
   },
   "author": "Anas Fajoui",
   "license": "ISC",
