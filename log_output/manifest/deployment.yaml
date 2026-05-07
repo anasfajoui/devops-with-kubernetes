@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
         - name: output-writer
-          image: fajouianas/devops-with-kubernetes:1.10-writer
+          image: fajouianas/devops-with-kubernetes:1.11-writer
+          imagePullPolicy: Always
           env:
             - name: LOG_FILE_PATH
               value: /shared/output.log
@@ -22,10 +23,13 @@ spec:
             - name: shared-logs
               mountPath: /shared
         - name: output-reader
-          image: fajouianas/devops-with-kubernetes:1.10-reader
+          image: fajouianas/devops-with-kubernetes:1.11-reader
+          imagePullPolicy: Always
           env:
             - name: LOG_FILE_PATH
               value: /shared/output.log
+            - name: PING_PONG_COUNT_FILE
+              value: /shared/ping-pong-count.txt
           ports:
             - containerPort: 3000
           volumeMounts:
@@ -33,4 +37,5 @@ spec:
               mountPath: /shared
       volumes:
         - name: shared-logs
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: shared-storage-claim
