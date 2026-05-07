@@ -1,27 +1,40 @@
+const fs = require('fs/promises')
 const Koa = require('koa')
+
 const app = new Koa()
 
-const PORT = process.env.PORT || 3000;
-
-let latest = { timestamp: null, randomstring: null };
-
-const refreshString = () => {
-    const randomstring = (Math.random() + 1).toString(36).substring(2);
-    const timestamp = new Date();
-    latest = {timestamp, randomstring};
-    console.log(timestamp, randomstring);
-}
-
-setInterval(refreshString, 5000);
+const PORT = process.env.PORT || 3000
+const LOG_FILE_PATH = process.env.LOG_FILE_PATH || '/shared/output.log'
 
 app.use(async ctx => {
-    if (ctx.path.includes('favicon.ico')) return
+  if (ctx.path.includes('favicon.ico')) {
+    ctx.status = 204
+    return
+  }
 
-    console.log('--------------------')
-    console.log(`Responding with ${latest.timestamp} ${latest.randomstring}`)
+  if (ctx.method !== 'GET') {
+    ctx.status = 405
+    ctx.body = 'Method Not Allowed\n'
+    return
+  }
 
-    ctx.body = latest
+  try {
+    const fileContent = await fs.readFile(LOG_FILE_PATH, 'utf8')
+    ctx.type = 'text/plain'
+    ctx.body = fileContent || 'Log file is empty.\n'
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      ctx.type = 'text/plain'
+      ctx.body = 'Log file has not been created yet.\n'
+      return
+    }
 
-}); 
+    console.error(`Failed to read ${LOG_FILE_PATH}:`, error)
+    ctx.status = 500
+    ctx.body = 'Could not read log file.\n'
+  }
+})
 
-app.listen(PORT)
+app.listen(PORT, () => {
+  console.log(`Reader listening on port ${PORT}, file: ${LOG_FILE_PATH}`)
+})

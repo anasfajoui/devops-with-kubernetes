@@ -13,5 +13,24 @@ spec:
         app: outputlogger
     spec:
       containers:
-        - name: outputlogger
-          image: fajouianas/devops-with-kubernetes:1.07
+        - name: output-writer
+          image: fajouianas/devops-with-kubernetes:1.10-writer
+          env:
+            - name: LOG_FILE_PATH
+              value: /shared/output.log
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /shared
+        - name: output-reader
+          image: fajouianas/devops-with-kubernetes:1.10-reader
+          env:
+            - name: LOG_FILE_PATH
+              value: /shared/output.log
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /shared
+      volumes:
+        - name: shared-logs
+          emptyDir: {}
