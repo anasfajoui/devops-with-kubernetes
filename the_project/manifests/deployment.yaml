@@ -4,6 +4,9 @@ metadata:
   name: project-config
 data:
   PORT: "3000"
+  IMAGE_URL: "https://picsum.photos/800/600"
+  IMAGE_CACHE_PATH: "/cache/image.jpg"
+  IMAGE_CACHE_TTL_MS: "600000"
 
 ---
 
@@ -23,7 +26,17 @@ spec:
     spec:
       containers:
         - name: project
-          image: fajouianas/devops-with-kubernetes:1.05
+          image: fajouianas/devops-with-kubernetes:1.12
+          imagePullPolicy: Always
           envFrom:
-          - configMapRef:
-              name: project-config
+            - configMapRef:
+                name: project-config
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: image-cache
+              mountPath: /cache
+      volumes:
+        - name: image-cache
+          persistentVolumeClaim:
+            claimName: shared-storage-claim

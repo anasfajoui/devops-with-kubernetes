@@ -1,3 +1,3 @@
-# Ignore the Dockerfile and the K8s manifest file
+# Ignore the Dockerfile and the K8s manifest files
 Dockerfile*
-manifest
+manifests

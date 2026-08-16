@@ -13,3 +13,4 @@
 - [1.9.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.9/ping_pong)
 - [1.10.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.10/log_output)
 - [1.11.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.11/persistent_volume)
+- [1.12.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.12/the_project)
