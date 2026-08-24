@@ -1,7 +1,7 @@
 {
   "name": "log-output",
-  "version": "1.1.0",
-  "description": "Writer appends timestamp and random string every 5s; reader serves the shared log over HTTP.",
+  "version": "2.0.1",
+  "description": "Serves timestamped output and fetches the pong count over HTTP.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

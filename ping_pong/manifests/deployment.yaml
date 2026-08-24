@@ -14,15 +14,5 @@ spec:
     spec:
       containers:
         - name: ping-pong
-          image: fajouianas/devops-with-kubernetes:1.11-pingpong
+          image: fajouianas/devops-with-kubernetes:2.01-pingpong
           imagePullPolicy: Always
-          env:
-            - name: PING_PONG_COUNT_FILE
-              value: /shared/ping-pong-count.txt
-          volumeMounts:
-            - name: shared-storage
-              mountPath: /shared
-      volumes:
-        - name: shared-storage
-          persistentVolumeClaim:
-            claimName: shared-storage-claim

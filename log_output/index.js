@@ -5,20 +5,23 @@ const app = new Koa()
 
 const PORT = process.env.PORT || 3000
 const LOG_FILE_PATH = process.env.LOG_FILE_PATH || '/shared/output.log'
-const PING_PONG_COUNT_FILE =
-  process.env.PING_PONG_COUNT_FILE || '/shared/ping-pong-count.txt'
+const PING_PONG_URL = process.env.PING_PONG_URL || 'http://ping-pong-svc:2345/pings'
 
 const readPingPongCount = async () => {
-  try {
-    const value = await fs.readFile(PING_PONG_COUNT_FILE, 'utf8')
-    const parsedValue = Number.parseInt(value.trim(), 10)
-    return Number.isNaN(parsedValue) ? 0 : parsedValue
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return 0
-    }
-    throw error
+  const response = await fetch(PING_PONG_URL, {
+    signal: AbortSignal.timeout(5_000),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Ping Pong responded with status ${response.status}`)
   }
+
+  const value = Number.parseInt((await response.text()).trim(), 10)
+  if (Number.isNaN(value)) {
+    throw new Error('Ping Pong returned an invalid counter value')
+  }
+
+  return value
 }
 
 app.use(async ctx => {
@@ -33,22 +36,29 @@ app.use(async ctx => {
     return
   }
 
+  let fileContent
+
   try {
-    const fileContent = await fs.readFile(LOG_FILE_PATH, 'utf8')
+    fileContent = await fs.readFile(LOG_FILE_PATH, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      fileContent = 'Log file has not been created yet.\n'
+    } else {
+      console.error(`Failed to read ${LOG_FILE_PATH}:`, error)
+      ctx.status = 500
+      ctx.body = 'Could not read log file.\n'
+      return
+    }
+  }
+
+  try {
     const pingPongs = await readPingPongCount()
     ctx.type = 'text/plain'
     ctx.body = `${fileContent || 'Log file is empty.\n'}Ping / Pongs: ${pingPongs}\n`
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      ctx.type = 'text/plain'
-      const pingPongs = await readPingPongCount()
-      ctx.body = `Log file has not been created yet.\nPing / Pongs: ${pingPongs}\n`
-      return
-    }
-
-    console.error(`Failed to read ${LOG_FILE_PATH}:`, error)
-    ctx.status = 500
-    ctx.body = 'Could not read log file.\n'
+    console.error(`Failed to fetch pong count from ${PING_PONG_URL}:`, error)
+    ctx.status = 502
+    ctx.body = 'Could not fetch pong count.\n'
   }
 })
 

@@ -1,4 +1,9 @@
-## More services: ping-pong application
+## Connecting pods: Ping Pong application
+
+Endpoints:
+
+- `GET /pingpong` increments the in-memory counter and returns `pong <count>`.
+- `GET /pings` returns the current count for the Log Output application.
 
 Deploy with `kubectl apply -f manifests`.
 

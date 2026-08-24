@@ -15,3 +15,7 @@
 - [1.11.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.11/persistent_volume)
 - [1.12.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.12/the_project)
 - [1.13.](https://github.com/anasfajoui/devops-with-kubernetes/tree/1.13/the_project)
+
+## Chapter 3: More building blocks
+
+- [2.1.](https://github.com/anasfajoui/devops-with-kubernetes/tree/2.1/log_output)
