@@ -1,0 +1,17 @@
+@baseUrl = http://localhost:8081/todos
+
+### Fetch all todos
+GET {{baseUrl}}
+Accept: application/json
+
+### Create a todo
+POST {{baseUrl}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "todo": "My todo"
+}
+
+### Shut down the Todo Backend process
+POST {{baseUrl}}/shutdown

@@ -7,6 +7,7 @@ data:
   IMAGE_URL: "https://picsum.photos/800/600"
   IMAGE_CACHE_PATH: "/cache/image.jpg"
   IMAGE_CACHE_TTL_MS: "600000"
+  TODO_BACKEND_URL: "http://todo-backend-svc:2345/todos"
 
 ---
 
@@ -26,7 +27,7 @@ spec:
     spec:
       containers:
         - name: project
-          image: fajouianas/devops-with-kubernetes:1.13
+          image: fajouianas/devops-with-kubernetes:2.02-the-project
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

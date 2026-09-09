@@ -1,0 +1,6 @@
+@baseUrl = http://localhost:3000
+
+### Fetch the latest log output and pong count
+GET {{baseUrl}}/
+Accept: text/plain
+

@@ -1,0 +1,13 @@
+@baseUrl = http://localhost:3000
+
+### Display the todo application
+GET {{baseUrl}}/
+Accept: text/html
+
+### Fetch the cached image
+GET {{baseUrl}}/image
+Accept: image/jpeg
+
+### Shut down the application process
+POST {{baseUrl}}/shutdown
+

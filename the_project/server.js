@@ -9,17 +9,39 @@ const PORT = process.env.PORT || 3000
 const IMAGE_URL = process.env.IMAGE_URL || 'https://picsum.photos/800/600'
 const IMAGE_CACHE_PATH = process.env.IMAGE_CACHE_PATH || '/cache/image.jpg'
 const IMAGE_CACHE_TTL_MS = Number(process.env.IMAGE_CACHE_TTL_MS || 10 * 60 * 1000)
-const todos = [
-  'Learn Kubernetes basics',
-  'Deploy the application to the cluster',
-  'Configure persistent volumes',
-]
+const TODO_BACKEND_URL =
+  process.env.TODO_BACKEND_URL || 'http://todo-backend-svc:2345/todos'
 
 const createRandomString = () => Math.random().toString(36).slice(2, 8)
 
 const startingString = createRandomString()
 let refreshPromise
 let server
+
+const escapeHtml = value =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+
+const getTodos = async () => {
+  const response = await fetch(TODO_BACKEND_URL, {
+    signal: AbortSignal.timeout(5_000),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Todo backend responded with status ${response.status}`)
+  }
+
+  const todos = await response.json()
+  if (!Array.isArray(todos) || !todos.every(todo => typeof todo === 'string')) {
+    throw new Error('Todo backend returned an invalid response')
+  }
+
+  return todos
+}
 
 const imageDetails = async () => {
   try {
@@ -120,7 +142,18 @@ app.use(async ctx => {
   console.log('--------------------')
   console.log(`Responding with ${stringNow}`)
 
-  const todoItems = todos.map(todo => `<li>${todo}</li>`).join('')
+  let todos
+
+  try {
+    todos = await getTodos()
+  } catch (error) {
+    console.error(`Could not fetch todos from ${TODO_BACKEND_URL}:`, error)
+    ctx.status = 502
+    ctx.body = 'Could not fetch todos.\n'
+    return
+  }
+
+  const todoItems = todos.map(todo => `<li>${escapeHtml(todo)}</li>`).join('')
 
   ctx.type = 'html'
   ctx.body = `
@@ -177,6 +210,12 @@ app.use(async ctx => {
             font: inherit;
             padding: 0.85rem 1.5rem;
           }
+          .form-error {
+            color: #b71c1c;
+            margin: 0.75rem auto 0;
+            max-width: 48rem;
+            min-height: 1.25rem;
+          }
           .todos {
             list-style: none;
             margin: 0;
@@ -189,15 +228,21 @@ app.use(async ctx => {
             margin-bottom: 0.75rem;
             padding: 1rem 1.25rem;
           }
-          .shutdown-form { text-align: center; }
-          .shutdown-form button {
+          .shutdown-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+          }
+          .shutdown-actions form { margin: 0; }
+          .shutdown-actions button {
             background: #d32f2f;
             border: 0;
             border-radius: 0.35rem;
             color: white;
             cursor: pointer;
             font: inherit;
-            margin-top: 1.5rem;
             padding: 0.7rem 1rem;
           }
           @media (max-width: 35rem) {
@@ -210,22 +255,56 @@ app.use(async ctx => {
         <main>
           <h1>Todo App</h1>
           <img src="/image" alt="Random landscape from Lorem Picsum" width="800" height="600">
-          <form class="todo-form">
+          <form class="todo-form" id="todo-form">
             <input
               type="text"
               name="todo"
               maxlength="140"
               placeholder="Enter a new todo (max 140 characters)"
               aria-label="New todo"
+              required
             >
-            <button type="button">Send</button>
+            <button type="submit">Send</button>
           </form>
+          <p class="form-error" id="form-error" role="alert"></p>
           <h2>Todos</h2>
           <ul class="todos">${todoItems}</ul>
-          <form class="shutdown-form" method="post" action="/shutdown">
-            <button type="submit">Shut down container</button>
-          </form>
+          <div class="shutdown-actions">
+            <form method="post" action="/shutdown">
+              <button type="submit">Shut down Todo App</button>
+            </form>
+            <form method="post" action="/todos/shutdown">
+              <button type="submit">Shut down Todo Backend</button>
+            </form>
+          </div>
         </main>
+        <script>
+          const form = document.querySelector('#todo-form')
+          const input = form.elements.todo
+          const errorMessage = document.querySelector('#form-error')
+
+          form.addEventListener('submit', async event => {
+            event.preventDefault()
+            errorMessage.textContent = ''
+
+            try {
+              const response = await fetch('/todos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ todo: input.value }),
+              })
+
+              if (!response.ok) {
+                const result = await response.json()
+                throw new Error(result.error || 'Could not create todo')
+              }
+
+              window.location.reload()
+            } catch (error) {
+              errorMessage.textContent = error.message
+            }
+          })
+        </script>
       </body>
     </html>
   `

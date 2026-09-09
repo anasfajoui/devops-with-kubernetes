@@ -1,0 +1,10 @@
+@baseUrl = http://localhost:3000
+
+### Increment the pong counter
+GET {{baseUrl}}/pingpong
+Accept: text/plain
+
+### Fetch the current pong count without incrementing it
+GET {{baseUrl}}/pings
+Accept: text/plain
+
