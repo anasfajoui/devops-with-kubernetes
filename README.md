@@ -20,3 +20,4 @@
 
 - [2.1.](https://github.com/anasfajoui/devops-with-kubernetes/tree/2.1/log_output)
 - [2.2.](https://github.com/anasfajoui/devops-with-kubernetes/tree/2.2/the_project)
+- [2.3.](https://github.com/anasfajoui/devops-with-kubernetes/tree/2.3/log_output)
