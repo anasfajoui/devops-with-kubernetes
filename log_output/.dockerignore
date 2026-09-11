@@ -1,3 +1,2 @@
-# Ignore the Dockerfile and the K8s manifest file
 Dockerfile*
 manifests

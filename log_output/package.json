@@ -1,7 +1,7 @@
 {
   "name": "log-output",
-  "version": "2.0.1",
-  "description": "Serves timestamped output and fetches the pong count over HTTP.",
+  "version": "2.0.5",
+  "description": "Serves configured information, timestamped output, and the pong count.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -2,10 +2,11 @@
 
 - The reader fetches the current pong count from the Ping Pong application's `GET /pings` endpoint through the `ping-pong-svc` K8s Service.
 - The writer and reader containers only share their generated log through an `emptyDir` volume inside the Log Output pod.
+- The `log-output-config` ConfigMap provides `/config/information.txt` as a mounted file and `MESSAGE` as an environment variable.
 
 Endpoints:
 
-- `GET /` returns the latest timestamped log output and the pong count fetched from the Ping Pong application.
+- `GET /` returns the configured file and environment values, latest timestamped log output, and pong count fetched from the Ping Pong application.
 
 Deploy with `kubectl apply -f manifests`.
 

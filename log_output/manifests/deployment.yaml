@@ -24,11 +24,18 @@ spec:
             - name: shared-logs
               mountPath: /shared
         - name: output-reader
-          image: fajouianas/devops-with-kubernetes:2.01-reader
+          image: fajouianas/devops-with-kubernetes:2.05-reader
           imagePullPolicy: Always
           env:
             - name: LOG_FILE_PATH
               value: /shared/output.log
+            - name: INFORMATION_FILE_PATH
+              value: /config/information.txt
+            - name: MESSAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: log-output-config
+                  key: MESSAGE
             - name: PING_PONG_URL
               value: http://ping-pong-svc:2345/pings
           ports:
@@ -36,6 +43,14 @@ spec:
           volumeMounts:
             - name: shared-logs
               mountPath: /shared
+            - name: log-output-config
+              mountPath: /config
       volumes:
         - name: shared-logs
           emptyDir: {}
+        - name: log-output-config
+          configMap:
+            name: log-output-config
+            items:
+              - key: information.txt
+                path: information.txt
