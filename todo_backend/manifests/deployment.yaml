@@ -15,10 +15,10 @@ spec:
     spec:
       containers:
         - name: todo-backend
-          image: fajouianas/devops-with-kubernetes:2.02-todo-backend
+          image: fajouianas/devops-with-kubernetes:2.06-todo-backend
           imagePullPolicy: Always
-          env:
-            - name: PORT
-              value: "3000"
+          envFrom:
+            - configMapRef:
+                name: todo-backend-config
           ports:
             - containerPort: 3000

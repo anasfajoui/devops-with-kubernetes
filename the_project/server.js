@@ -5,12 +5,32 @@ const Koa = require('koa')
 
 const app = new Koa()
 
-const PORT = process.env.PORT || 3000
-const IMAGE_URL = process.env.IMAGE_URL || 'https://picsum.photos/800/600'
-const IMAGE_CACHE_PATH = process.env.IMAGE_CACHE_PATH || '/cache/image.jpg'
-const IMAGE_CACHE_TTL_MS = Number(process.env.IMAGE_CACHE_TTL_MS || 10 * 60 * 1000)
-const TODO_BACKEND_URL =
-  process.env.TODO_BACKEND_URL || 'http://todo-backend-svc:2345/todos'
+const requireEnv = name => {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}
+
+const requirePositiveIntegerEnv = name => {
+  const value = Number(requireEnv(name))
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`)
+  }
+  return value
+}
+
+const PORT = requirePositiveIntegerEnv('PORT')
+const IMAGE_URL = requireEnv('IMAGE_URL')
+const IMAGE_CACHE_PATH = requireEnv('IMAGE_CACHE_PATH')
+const IMAGE_CACHE_TTL_MS = requirePositiveIntegerEnv('IMAGE_CACHE_TTL_MS')
+const IMAGE_FETCH_TIMEOUT_MS = requirePositiveIntegerEnv('IMAGE_FETCH_TIMEOUT_MS')
+const TODO_BACKEND_URL = requireEnv('TODO_BACKEND_URL')
+const TODO_BACKEND_TIMEOUT_MS = requirePositiveIntegerEnv('TODO_BACKEND_TIMEOUT_MS')
+const MAX_TODO_LENGTH = requirePositiveIntegerEnv('MAX_TODO_LENGTH')
+const IMAGE_WIDTH = requirePositiveIntegerEnv('IMAGE_WIDTH')
+const IMAGE_HEIGHT = requirePositiveIntegerEnv('IMAGE_HEIGHT')
 
 const createRandomString = () => Math.random().toString(36).slice(2, 8)
 
@@ -28,7 +48,7 @@ const escapeHtml = value =>
 
 const getTodos = async () => {
   const response = await fetch(TODO_BACKEND_URL, {
-    signal: AbortSignal.timeout(5_000),
+    signal: AbortSignal.timeout(TODO_BACKEND_TIMEOUT_MS),
   })
 
   if (!response.ok) {
@@ -63,7 +83,7 @@ const refreshImage = () => {
   refreshPromise = (async () => {
     const response = await fetch(IMAGE_URL, {
       redirect: 'follow',
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
     })
 
     if (!response.ok) {
@@ -254,13 +274,13 @@ app.use(async ctx => {
       <body>
         <main>
           <h1>Todo App</h1>
-          <img src="/image" alt="Random landscape from Lorem Picsum" width="800" height="600">
+          <img src="/image" alt="Random landscape from Lorem Picsum" width="${IMAGE_WIDTH}" height="${IMAGE_HEIGHT}">
           <form class="todo-form" id="todo-form">
             <input
               type="text"
               name="todo"
-              maxlength="140"
-              placeholder="Enter a new todo (max 140 characters)"
+              maxlength="${MAX_TODO_LENGTH}"
+              placeholder="Enter a new todo (max ${MAX_TODO_LENGTH} characters)"
               aria-label="New todo"
               required
             >

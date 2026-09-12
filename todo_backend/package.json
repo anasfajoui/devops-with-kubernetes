@@ -1,6 +1,6 @@
 {
   "name": "todo-backend",
-  "version": "2.0.2",
+  "version": "2.0.6",
   "description": "An in-memory API for creating and listing todos.",
   "main": "index.js",
   "scripts": {

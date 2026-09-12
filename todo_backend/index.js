@@ -1,7 +1,24 @@
 const http = require('http')
 
-const PORT = process.env.PORT || 3000
-const MAX_TODO_LENGTH = 140
+const requireEnv = name => {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}
+
+const requirePositiveIntegerEnv = name => {
+  const value = Number(requireEnv(name))
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`)
+  }
+  return value
+}
+
+const PORT = requirePositiveIntegerEnv('PORT')
+const MAX_TODO_LENGTH = requirePositiveIntegerEnv('MAX_TODO_LENGTH')
+const MAX_REQUEST_BODY_LENGTH = requirePositiveIntegerEnv('MAX_REQUEST_BODY_LENGTH')
 const todos = [
   'Learn Kubernetes basics',
   'Deploy the application to the cluster',
@@ -19,7 +36,7 @@ const readJsonBody = req =>
 
     req.on('data', chunk => {
       body += chunk
-      if (body.length > 10_000) {
+      if (body.length > MAX_REQUEST_BODY_LENGTH) {
         reject(new Error('Request body is too large'))
       }
     })
