@@ -1,0 +1,101 @@
+name: Build and publish Docker images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-images.yml"
+      - "log_output/**"
+      - "ping_pong/**"
+      - "the_project/**"
+      - "todo_backend/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: true 
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Log Output writer
+            context: ./log_output
+            dockerfile: ./log_output/Dockerfile.writer
+            manifest: ./log_output/manifests/deployment.yaml
+            container: output-writer
+          - name: Log Output reader
+            context: ./log_output
+            dockerfile: ./log_output/Dockerfile.reader
+            manifest: ./log_output/manifests/deployment.yaml
+            container: output-reader
+          - name: Ping Pong
+            context: ./ping_pong
+            dockerfile: ./ping_pong/Dockerfile
+            manifest: ./ping_pong/manifests/deployment.yaml
+            container: ping-pong
+          - name: Todo App
+            context: ./the_project
+            dockerfile: ./the_project/Dockerfile
+            manifest: ./the_project/manifests/deployment.yaml
+            container: project
+          - name: Todo Backend
+            context: ./todo_backend
+            dockerfile: ./todo_backend/Dockerfile
+            manifest: ./todo_backend/manifests/deployment.yaml
+            container: todo-backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Read image tag from Deployment
+        id: image
+        shell: bash
+        env:
+          CONTAINER_NAME: ${{ matrix.container }}
+          DEPLOYMENT_MANIFEST: ${{ matrix.manifest }}
+        run: |
+          image="$(
+            awk -v container="$CONTAINER_NAME" '
+              $1 == "-" && $2 == "name:" && $3 == container { found = 1; next }
+              found && $1 == "image:" { print $2; exit }
+            ' "$DEPLOYMENT_MANIFEST"
+          )"
+
+          if [[ -z "$image" ]]; then
+            echo "Could not find the image for container $CONTAINER_NAME in $DEPLOYMENT_MANIFEST" >&2
+            exit 1
+          fi
+
+          if [[ "$image" != */*:* ]]; then
+            echo "The Deployment image must include a registry namespace and tag: $image" >&2
+            exit 1
+          fi
+
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.image.outputs.image }}
