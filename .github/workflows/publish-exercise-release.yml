@@ -1,0 +1,44 @@
+name: Publish exercise release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish exercise release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pushed commit
+        uses: actions/checkout@v6
+
+      - name: Create releases for completed exercises
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          subject="$(git log -1 --format='%s' "$COMMIT_SHA")"
+
+          if [[ ! "$subject" =~ ^([0-9]+\.[0-9]+):[[:space:]]+done$ ]]; then
+            echo "Commit '$subject' does not complete an exercise; skipping."
+            exit 0
+          fi
+
+          exercise="${BASH_REMATCH[1]}"
+
+          if gh release view "$exercise" >/dev/null 2>&1; then
+            echo "Release $exercise already exists; skipping."
+            exit 0
+          fi
+
+          gh release create "$exercise" \
+            --target "$COMMIT_SHA" \
+            --title "$exercise" \
+            --notes ""
