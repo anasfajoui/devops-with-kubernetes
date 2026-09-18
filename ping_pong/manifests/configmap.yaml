@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: exercises
+  name: ping-pong-config
+data:
+  PORT: "3000"
+  PGHOST: postgres-svc
+  PGPORT: "5432"
+  PGDATABASE: pingpong
+  PGUSER: pingpong

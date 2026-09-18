@@ -15,5 +15,13 @@ spec:
     spec:
       containers:
         - name: ping-pong
-          image: fajouianas/devops-with-kubernetes:2.01-pingpong
+          image: fajouianas/devops-with-kubernetes:2.07-pingpong
           imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: ping-pong-config
+            - secretRef:
+                name: ping-pong-db-secret
+          ports:
+            - name: http
+              containerPort: 3000

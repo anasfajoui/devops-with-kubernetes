@@ -1,1 +1,2 @@
-tmp/
+ping_pong/manifests/secret.yaml
+ping_pong/manifests/age-key.txt
