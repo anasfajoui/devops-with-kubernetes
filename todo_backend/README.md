@@ -1,7 +1,5 @@
 ## Todo Backend
 
-The Todo Backend stores todos in memory for the duration of the container's life.
-
 Endpoints:
 
 - `GET /todos` returns the list of todos as JSON.

@@ -1,4 +1,5 @@
 const http = require('http')
+const { Pool } = require('pg')
 
 const requireEnv = name => {
   const value = process.env[name]
@@ -19,11 +20,70 @@ const requirePositiveIntegerEnv = name => {
 const PORT = requirePositiveIntegerEnv('PORT')
 const MAX_TODO_LENGTH = requirePositiveIntegerEnv('MAX_TODO_LENGTH')
 const MAX_REQUEST_BODY_LENGTH = requirePositiveIntegerEnv('MAX_REQUEST_BODY_LENGTH')
-const todos = [
+const pool = new Pool({
+  host: requireEnv('PGHOST'),
+  port: requirePositiveIntegerEnv('PGPORT'),
+  database: requireEnv('PGDATABASE'),
+  user: requireEnv('PGUSER'),
+  password: requireEnv('PGPASSWORD'),
+})
+const INITIAL_TODOS = [
   'Learn Kubernetes basics',
   'Deploy the application to the cluster',
   'Configure persistent volumes',
 ]
+
+let databaseInitialization
+
+const initializeDatabase = () => {
+  if (!databaseInitialization) {
+    databaseInitialization = (async () => {
+      const client = await pool.connect()
+
+      try {
+        await client.query('BEGIN')
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS todos (
+            id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            todo TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `)
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS application_metadata (
+            key TEXT PRIMARY KEY
+          )
+        `)
+
+        const seedClaim = await client.query(`
+          INSERT INTO application_metadata (key)
+          VALUES ('initial-todos-created')
+          ON CONFLICT (key) DO NOTHING
+          RETURNING key
+        `)
+
+        if (seedClaim.rowCount === 1) {
+          await client.query(
+            'INSERT INTO todos (todo) SELECT unnest($1::text[])',
+            [INITIAL_TODOS]
+          )
+        }
+
+        await client.query('COMMIT')
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
+    })().catch(error => {
+      databaseInitialization = undefined
+      throw error
+    })
+  }
+
+  return databaseInitialization
+}
 
 const sendJson = (res, status, body) => {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -70,7 +130,9 @@ const handleRequest = async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    sendJson(res, 200, todos)
+    await initializeDatabase()
+    const result = await pool.query('SELECT todo FROM todos ORDER BY id')
+    sendJson(res, 200, result.rows.map(row => row.todo))
     return
   }
 
@@ -98,8 +160,12 @@ const handleRequest = async (req, res) => {
       return
     }
 
-    todos.push(todo)
-    sendJson(res, 201, { todo })
+    await initializeDatabase()
+    const result = await pool.query(
+      'INSERT INTO todos (todo) VALUES ($1) RETURNING todo',
+      [todo]
+    )
+    sendJson(res, 201, result.rows[0])
     return
   }
 

@@ -7,3 +7,7 @@ data:
   PORT: "3000"
   MAX_TODO_LENGTH: "140"
   MAX_REQUEST_BODY_LENGTH: "10000"
+  PGHOST: todo-postgres-svc
+  PGPORT: "5432"
+  PGDATABASE: todos
+  PGUSER: todo_backend

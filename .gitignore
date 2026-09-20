@@ -1,2 +1,3 @@
+age-key.txt
 ping_pong/manifests/secret.yaml
-ping_pong/manifests/age-key.txt
+todo_backend/manifests/secret.yaml

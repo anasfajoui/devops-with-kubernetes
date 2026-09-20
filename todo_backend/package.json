@@ -1,10 +1,13 @@
 {
   "name": "todo-backend",
-  "version": "2.0.6",
-  "description": "An in-memory API for creating and listing todos.",
+  "version": "2.0.8",
+  "description": "A PostgreSQL-backed API for creating and listing todos.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
   },
   "author": "Anas Fajoui",
   "license": "ISC"
