@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  namespace: project
+  name: random-wikipedia-todo
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: random-wikipedia-todo
+              image: fajouianas/devops-with-kubernetes:2.09-todo-backend
+              imagePullPolicy: Always
+              command:
+                - node
+                - create-random-todo.js
+              env:
+                - name: RANDOM_ARTICLE_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: RANDOM_ARTICLE_URL
+                - name: TODO_BACKEND_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: TODO_BACKEND_URL
+                - name: HTTP_REQUEST_TIMEOUT_MS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: HTTP_REQUEST_TIMEOUT_MS
+                - name: MAX_TODO_LENGTH
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: MAX_TODO_LENGTH
+                - name: RANDOM_ARTICLE_ATTEMPTS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: RANDOM_ARTICLE_ATTEMPTS

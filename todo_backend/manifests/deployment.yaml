@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: todo-backend
-          image: fajouianas/devops-with-kubernetes:2.08-todo-backend
+          image: fajouianas/devops-with-kubernetes:2.09-todo-backend
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

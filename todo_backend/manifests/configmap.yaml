@@ -11,3 +11,7 @@ data:
   PGPORT: "5432"
   PGDATABASE: todos
   PGUSER: todo_backend
+  RANDOM_ARTICLE_URL: "https://en.wikipedia.org/wiki/Special:Random"
+  TODO_BACKEND_URL: "http://todo-backend-svc:2345/todos"
+  HTTP_REQUEST_TIMEOUT_MS: "10000"
+  RANDOM_ARTICLE_ATTEMPTS: "5"

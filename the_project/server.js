@@ -46,6 +46,26 @@ const escapeHtml = value =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;')
 
+const renderTodo = todo => {
+  const prefix = 'Read '
+
+  if (!todo.startsWith(prefix)) {
+    return escapeHtml(todo)
+  }
+
+  try {
+    const url = new URL(todo.slice(prefix.length))
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return escapeHtml(todo)
+    }
+
+    const safeUrl = escapeHtml(url.toString())
+    return `${prefix}<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`
+  } catch {
+    return escapeHtml(todo)
+  }
+}
+
 const getTodos = async () => {
   const response = await fetch(TODO_BACKEND_URL, {
     signal: AbortSignal.timeout(TODO_BACKEND_TIMEOUT_MS),
@@ -173,7 +193,7 @@ app.use(async ctx => {
     return
   }
 
-  const todoItems = todos.map(todo => `<li>${escapeHtml(todo)}</li>`).join('')
+  const todoItems = todos.map(todo => `<li>${renderTodo(todo)}</li>`).join('')
 
   ctx.type = 'html'
   ctx.body = `
@@ -247,6 +267,9 @@ app.use(async ctx => {
             box-shadow: 0 0.15rem 0.6rem rgb(0 0 0 / 10%);
             margin-bottom: 0.75rem;
             padding: 1rem 1.25rem;
+          }
+          .todos a {
+            overflow-wrap: anywhere;
           }
           .shutdown-actions {
             display: flex;
