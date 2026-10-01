@@ -110,7 +110,7 @@ const readJsonBody = req =>
     req.on('error', reject)
   })
 
-const handleRequest = async (req, res) => {
+const handleRequest = async (req, res, requestLog) => {
   const requestPath = req.url.split('?')[0]
 
   if (requestPath === '/todos/shutdown' && req.method === 'POST') {
@@ -142,20 +142,26 @@ const handleRequest = async (req, res) => {
     try {
       requestBody = await readJsonBody(req)
     } catch (error) {
+      requestLog.reason = error.message
       sendJson(res, 400, { error: error.message })
       return
     }
 
-    const todo = typeof requestBody.todo === 'string' ? requestBody.todo.trim() : ''
+    requestLog.todo = typeof requestBody?.todo === 'string' ? requestBody.todo : null
+    const todo = requestLog.todo === null ? '' : requestLog.todo.trim()
+    requestLog.todoLength = todo.length
+    requestLog.maxTodoLength = MAX_TODO_LENGTH
 
     if (!todo) {
-      sendJson(res, 400, { error: 'Todo must not be empty' })
+      requestLog.reason = 'Todo must not be empty'
+      sendJson(res, 400, { error: requestLog.reason })
       return
     }
 
     if (todo.length > MAX_TODO_LENGTH) {
+      requestLog.reason = `Todo must not exceed ${MAX_TODO_LENGTH} characters`
       sendJson(res, 400, {
-        error: `Todo must not exceed ${MAX_TODO_LENGTH} characters`,
+        error: requestLog.reason,
       })
       return
     }
@@ -177,8 +183,32 @@ const handleRequest = async (req, res) => {
 }
 
 const server = http.createServer((req, res) => {
-  handleRequest(req, res).catch(error => {
+  const startedAt = process.hrtime.bigint()
+  const path = req.url.split('?')[0]
+  const isTodoSubmission = req.method === 'POST' && path === '/todos'
+  const requestLog = {
+    event: isTodoSubmission ? 'todo_request' : 'http_request',
+    method: req.method,
+    path,
+  }
+
+  res.once('finish', () => {
+    const status = res.statusCode
+    if (isTodoSubmission) {
+      requestLog.outcome = status === 201 ? 'accepted' : status < 500 ? 'rejected' : 'failed'
+    }
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info',
+      ...requestLog,
+      status,
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    }))
+  })
+
+  handleRequest(req, res, requestLog).catch(error => {
     console.error(`Failed to process request for ${req.url}:`, error)
+    requestLog.reason = 'Internal Server Error'
     if (!res.headersSent) {
       sendJson(res, 500, { error: 'Internal Server Error' })
     } else {

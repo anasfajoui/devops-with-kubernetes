@@ -14,7 +14,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: random-wikipedia-todo
-              image: fajouianas/devops-with-kubernetes:2.09-todo-backend
+              image: fajouianas/devops-with-kubernetes:2.10-todo-backend
               imagePullPolicy: Always
               command:
                 - node
