@@ -37,9 +37,13 @@ spec:
                   name: log-output-config
                   key: MESSAGE
             - name: PING_PONG_URL
-              value: http://ping-pong-svc:2345/pings
+              valueFrom:
+                configMapKeyRef:
+                  name: log-output-config
+                  key: PING_PONG_URL
           ports:
-            - containerPort: 3000
+            - name: http
+              containerPort: 3000
           volumeMounts:
             - name: shared-logs
               mountPath: /shared

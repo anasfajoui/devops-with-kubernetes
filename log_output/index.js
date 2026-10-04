@@ -8,7 +8,7 @@ const LOG_FILE_PATH = process.env.LOG_FILE_PATH || '/shared/output.log'
 const INFORMATION_FILE_PATH =
   process.env.INFORMATION_FILE_PATH || '/config/information.txt'
 const MESSAGE = process.env.MESSAGE || ''
-const PING_PONG_URL = process.env.PING_PONG_URL || 'http://ping-pong-svc:2345/pings'
+const PING_PONG_URL = process.env.PING_PONG_URL || 'http://ping-pong-svc:80/pings'
 
 const readPingPongCount = async () => {
   const response = await fetch(PING_PONG_URL, {

@@ -1,4 +1,4 @@
-@baseUrl = http://<EXTERNAL-IP>
+@baseUrl = http://<INGRESS_ADDRESS>
 
 ### Increment the pong counter
 GET {{baseUrl}}/pingpong

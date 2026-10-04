@@ -7,3 +7,4 @@ data:
   MESSAGE: "hello world"
   information.txt: |
     this text is from file
+  PING_PONG_URL: "http://ping-pong-svc:80/pings"

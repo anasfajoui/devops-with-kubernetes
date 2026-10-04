@@ -1,7 +1,11 @@
-Endpoints:
+## Ping Pong
+
+### Endpoints
 
 - `GET /pingpong` increments the PostgreSQL-backed counter and returns `pong <count>`.
 - `GET /pings` returns the current count for the Log Output application.
+
+### Deployment
 
 `manifests/secret.enc.yaml` is encrypted with SOPS and must be decrypted before K8s can use it:
 
@@ -21,10 +25,12 @@ kubectl apply \
   -f manifests/deployment.yaml
 ```
 
-Wait for PostgreSQL and Ping-pong to start, then find the LoadBalancer address:
+This app shares an ingress with log_output app, so you might want to do `kubectl apply -f ../log_output/manifests` as well.
+
+Wait for PostgreSQL and Ping-pong to start, then find the ingress address:
 
 ```bash
-kubectl -n exercises get service ping-pong-svc --watch
+kubectl -n exercises get ingress --watch
 ```
 
-The app is available at `http://<EXTERNAL-IP>/pingpong` once the external IP is assigned.
+The app is available at `http://<INGRESS_ADDRESS>/pingpong` once the IP address is assigned.
