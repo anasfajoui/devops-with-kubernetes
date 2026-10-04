@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:3000
+@baseUrl = http://<EXTERNAL-IP>
 
 ### Increment the pong counter
 GET {{baseUrl}}/pingpong

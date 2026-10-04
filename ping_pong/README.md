@@ -21,6 +21,10 @@ kubectl apply \
   -f manifests/deployment.yaml
 ```
 
-This app shares an ingress with log_output app, so you might as well do `kubectl apply -f ../log_output/manifests` and it would still work.
+Wait for PostgreSQL and Ping-pong to start, then find the LoadBalancer address:
 
-App should be accessible through [http://localhost:8081/pingpong](http://localhost:8081/pingpong). the localhost:8081 port has to be forwarded to port 80 of the k3d loadbalancer inside the cluster.
+```bash
+kubectl -n exercises get service ping-pong-svc --watch
+```
+
+The app is available at `http://<EXTERNAL-IP>/pingpong` once the external IP is assigned.
