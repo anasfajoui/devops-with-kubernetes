@@ -4,10 +4,10 @@ metadata:
   namespace: project
   name: project-svc
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: project
   ports:
-    - port: 2345
+    - port: 80
       protocol: TCP
       targetPort: http

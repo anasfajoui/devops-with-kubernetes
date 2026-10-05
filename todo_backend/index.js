@@ -124,6 +124,11 @@ const handleRequest = async (req, res, requestLog) => {
     return
   }
 
+  if (requestPath === '/') {
+    sendJson(res, 200, 'OK')
+    return;
+  }
+
   if (requestPath !== '/todos') {
     sendJson(res, 404, { error: 'Not Found' })
     return

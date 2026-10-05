@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: project
-          image: fajouianas/devops-with-kubernetes:2.09-the-project
+          image: PROJECT/IMAGE
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

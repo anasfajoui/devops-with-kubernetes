@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: project
+
+resources:
+  - manifests/namespace.yaml
+  - manifests/configmap.yaml
+  - manifests/persistentvolumeclaim.yaml
+  - manifests/deployment.yaml
+  - manifests/service.yaml
+  - manifests/ingress.yaml
+  - ../todo_backend/
+images:
+  - name: PROJECT/IMAGE
+    newName: fajouianas/devops-with-kubernetes:3.05-the-project

@@ -4,10 +4,10 @@ metadata:
   namespace: project
   name: todo-backend-svc
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: todo-backend
   ports:
-    - port: 2345
+    - port: 80
       protocol: TCP
       targetPort: http

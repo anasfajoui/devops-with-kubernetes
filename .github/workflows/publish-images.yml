@@ -45,43 +45,80 @@ jobs:
           - name: Todo App
             context: ./the_project
             dockerfile: ./the_project/Dockerfile
-            manifest: ./the_project/manifests/deployment.yaml
-            container: project
+            kustomization: ./the_project/kustomization.yaml
+            image_name: PROJECT/IMAGE
           - name: Todo Backend
             context: ./todo_backend
             dockerfile: ./todo_backend/Dockerfile
-            manifest: ./todo_backend/manifests/deployment.yaml
-            container: todo-backend
+            kustomization: ./todo_backend/kustomization.yaml
+            image_name: TODO/IMAGE
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Read image tag from Deployment
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install YAML parser
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Read image tag from configuration
         id: image
         shell: bash
         env:
           CONTAINER_NAME: ${{ matrix.container }}
           DEPLOYMENT_MANIFEST: ${{ matrix.manifest }}
+          KUSTOMIZATION_FILE: ${{ matrix.kustomization }}
+          IMAGE_NAME: ${{ matrix.image_name }}
         run: |
-          image="$(
-            awk -v container="$CONTAINER_NAME" '
-              $1 == "-" && $2 == "name:" && $3 == container { found = 1; next }
-              found && $1 == "image:" { print $2; exit }
-            ' "$DEPLOYMENT_MANIFEST"
-          )"
+          python - <<'PY'
+          import os
+          from pathlib import Path
 
-          if [[ -z "$image" ]]; then
-            echo "Could not find the image for container $CONTAINER_NAME in $DEPLOYMENT_MANIFEST" >&2
-            exit 1
-          fi
+          import yaml
 
-          if [[ "$image" != */*:* ]]; then
-            echo "The Deployment image must include a registry namespace and tag: $image" >&2
-            exit 1
-          fi
+          kustomization = os.environ["KUSTOMIZATION_FILE"]
+          if kustomization:
+              config = yaml.safe_load(Path(kustomization).read_text(encoding="utf-8"))
+              image_name = os.environ["IMAGE_NAME"]
+              matches = [
+                  entry for entry in config.get("images", [])
+                  if entry.get("name") == image_name
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"Expected exactly one image named {image_name} in {kustomization}"
+                  )
+              entry = matches[0]
+              if entry.get("digest"):
+                  raise SystemExit("Publishing an image requires a tag, not a digest")
+              image = entry.get("newName", image_name)
+              if "newTag" in entry:
+                  repository, separator, name = image.rpartition("/")
+                  image = f"{repository}{separator}{name.split(':', 1)[0]}:{entry['newTag']}"
+          else:
+              manifest = os.environ["DEPLOYMENT_MANIFEST"]
+              config = yaml.safe_load(Path(manifest).read_text(encoding="utf-8"))
+              container_name = os.environ["CONTAINER_NAME"]
+              matches = [
+                  container for container in config["spec"]["template"]["spec"]["containers"]
+                  if container["name"] == container_name
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"Expected exactly one container named {container_name} in {manifest}"
+                  )
+              image = matches[0]["image"]
 
-          echo "image=$image" >> "$GITHUB_OUTPUT"
+          if "/" not in image or ":" not in image.rsplit("/", 1)[-1] or "@" in image:
+              raise SystemExit(f"The image must include a registry namespace and tag: {image}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"image={image}\n")
+          PY
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4

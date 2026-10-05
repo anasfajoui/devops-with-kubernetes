@@ -1,25 +1,36 @@
 ## The project
 
-The application now includes:
-- A todo input limited to 140 characters.
-- A form that sends new todos to the Todo Backend service.
-- A list of todos fetched from the Todo Backend service.
-- A persistently cached random image.
+- The form sends new todos (limited to 140 characters) to the Todo Backend service.
+- The list of todos is fetched from the Todo Backend service.
+- The random image is persistently cached.
+- The shutdown buttons exit either the Todo App or Todo Backend process so K8s restarts the selected container. The cached image and PostgreSQL-backed todos persist across application restarts.
 
-Deploy the persistent volume resources first, then the application:
+### Deployment
+
+The root `kustomization.yaml` combines the Todo App, Todo Backend, PostgreSQL, hourly CronJob, image-cache PVC, and project namespace.
+
+First, you need to decrypted database Secret first:
 
 ```sh
-kubectl apply -f ../persistent_volume/manifests
-kubectl apply -f ../todo_backend/manifests
-kubectl apply -f manifests
+export SOPS_AGE_KEY_FILE=/path/to/your/age-private-key.txt
+sops --decrypt ../todo_backend/manifests/secret.enc.yaml >../todo_backend/manifests/secret.yaml
 ```
 
-The shutdown buttons exit either the Todo App or Todo Backend process so
-Kubernetes restarts the selected container. The cached image remains available
-after a Todo App restart, while the in-memory todos reset after a Todo Backend
-restart.
+The Secret is managed separately because Kustomize does not decrypt SOPS files. Then deploy all project resources with Kustomize:
 
-App should be accessible through [http://localhost:8081/](http://localhost:8081/):
+```sh
+kubectl apply -k .
+```
+
+Find the ingress address:
+
+```sh
+kubectl -n project get ingress --watch
+```
+
+The app should be available at http://<INGRESS_ADDRESS>/ once the IP address is assigned.
+
+### Endpoints
 
 - `GET /` — displays the todo application.
 - `GET /image` — serves the persistently cached Lorem Picsum image.

@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:8081/todos
+@baseUrl = http://<INGRESS_ADDRESS>/todos
 
 ### Fetch all todos
 GET {{baseUrl}}
