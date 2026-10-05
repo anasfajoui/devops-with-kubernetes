@@ -10,14 +10,19 @@
 
 ### Deployment
 
-Deploy with `kubectl apply -f manifests`.
-
-This app shares an ingress with ping_pong app, so you might want to do `kubectl apply -f ../ping_pong/manifests` as well.
-
-Find the ingress address:
+Create the shared namespace, then deploy:
 
 ```bash
-kubectl -n exercises get ingress --watch
+kubectl apply -f manifests/namespace.yaml
+kubectl apply -f manifests
 ```
 
-The app is available at `http://<INGRESS_ADDRESS>/` once the IP address is assigned.
+This app shares a Gateway with Ping Pong app. Deploy Ping Pong app using the instructions in `../ping_pong/README.md`.
+
+Find the Gateway address:
+
+```bash
+kubectl -n exercises get gateway log-output-ping-pong-gateway --watch
+```
+
+The app should be available at `http://<GATEWAY_ADDRESS>/` once the IP address is assigned.

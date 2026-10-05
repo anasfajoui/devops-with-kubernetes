@@ -1,4 +1,4 @@
-@baseUrl = http://<INGRESS_ADDRESS>
+@baseUrl = http://<GATEWAY_ADDRESS>
 
 ### Increment the pong counter
 GET {{baseUrl}}/pingpong
