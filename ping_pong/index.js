@@ -55,12 +55,6 @@ const handleRequest = async (req, res) => {
   const requestPath = req.url.split('?')[0];
 
   if (requestPath === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
-    return;
-  }
-
-  if (requestPath === '/pingpong') {
     await initializeDatabase();
     const result = await pool.query(`
       UPDATE ping_pong_counter

@@ -2,8 +2,10 @@
 
 ### Endpoints
 
-- `GET /pingpong` increments the PostgreSQL-backed counter and returns `pong <count>`.
+- `GET /` increments the PostgreSQL-backed counter and returns `pong <count>`.
 - `GET /pings` returns the current count for the Log Output application.
+
+The Gateway accepts `GET /pingpong` and rewrites its path to `/` before forwarding it to Ping Pong. Its health check uses `/pings`, so probes do not increment the counter.
 
 ### Deployment
 
@@ -29,7 +31,8 @@ kubectl apply \
   -f manifests/postgres-statefulset.yaml \
   -f manifests/service.yaml \
   -f manifests/deployment.yaml \
-  -f manifests/httproute.yaml
+  -f manifests/healthcheckpolicy.yaml \
+  -f manifests/route.yaml
 ```
 
 This app shares a Gateway with Log Output app. Apply its Gateway and route with `kubectl apply -f ../log_output/manifests`.
