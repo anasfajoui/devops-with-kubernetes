@@ -13,4 +13,3 @@ resources:
   - ../todo_backend/
 images:
   - name: PROJECT/IMAGE
-    newName: fajouianas/devops-with-kubernetes:3.05-the-project

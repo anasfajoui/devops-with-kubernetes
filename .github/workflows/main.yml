@@ -1,0 +1,204 @@
+name: Release application
+
+on:
+  push:
+    paths:
+      - ".github/workflows/main.yml"
+      - "the_project/**"
+      - "todo_backend/**"
+      - ".sops.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-application
+  cancel-in-progress: false
+
+env:
+  GKE_CLUSTER: dwk-cluster
+  GKE_LOCATION: europe-west1-b
+  GKE_CLUSTER_VERSION: "1.36"
+  REGISTRY: europe-west1-docker.pkg.dev
+  REPOSITORY: dwk-repository
+  SOPS_VERSION: "3.13.3"
+  NAMESPACE: project
+  PROJECT_IMAGE: the-project
+  TODO_BACKEND_IMAGE: todo-backend
+
+jobs:
+  ensure-cluster:
+    name: Ensure GKE cluster is ready
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: GKE_PROJECT
+    env:
+      PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Create cluster if missing
+        run: |
+          existing_cluster="$(gcloud container clusters list \
+            --project "$PROJECT_ID" \
+            --zone "$GKE_LOCATION" \
+            --filter "name=$GKE_CLUSTER" \
+            --format 'value(name)')"
+
+          if [[ -z "$existing_cluster" ]]; then
+            gcloud container clusters create "$GKE_CLUSTER" \
+              --project "$PROJECT_ID" \
+              --zone "$GKE_LOCATION" \
+              --cluster-version "$GKE_CLUSTER_VERSION" \
+              --disk-size 32 \
+              --num-nodes 4 \
+              --machine-type e2-small \
+              --quiet
+          else
+            echo "Cluster $GKE_CLUSTER already exists in $GKE_LOCATION"
+          fi
+
+      - name: Wait for cluster to be running
+        run: |
+          # Also handles a cluster whose creation began before this workflow run.
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            status="$(gcloud container clusters describe "$GKE_CLUSTER" \
+              --project "$PROJECT_ID" \
+              --zone "$GKE_LOCATION" \
+              --format 'value(status)')"
+            echo "Cluster status: $status"
+            case "$status" in
+              RUNNING) exit 0 ;;
+              PROVISIONING|RECONCILING) sleep 20 ;;
+              *) echo "Cluster cannot be deployed to in status: $status"; exit 1 ;;
+            esac
+          done
+          echo "Timed out waiting for cluster $GKE_CLUSTER to become RUNNING"
+          exit 1
+
+  build-publish-deploy:
+    name: Build, publish and deploy Todo App
+    needs: ensure-cluster
+    runs-on: ubuntu-latest
+    environment: GKE_PROJECT
+    env:
+      PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./the_project
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Form the image tags
+        run: |
+          branch="$(printf '%s' "$GITHUB_REF_NAME" | sed -E 's/[^a-zA-Z0-9_.-]+/-/g; s/^[.-]+//')"
+          branch="${branch:-branch}"
+          printf 'PROJECT_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$PROJECT_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          printf 'TODO_BACKEND_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$TODO_BACKEND_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud --quiet auth configure-docker "$REGISTRY"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push The Project image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./the_project
+          file: ./the_project/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ env.PROJECT_IMAGE_TAG }}
+
+      - name: Build and push Todo Backend image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./todo_backend
+          file: ./todo_backend/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v3
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v3
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          project_id: ${{ env.PROJECT_ID }}
+          location: ${{ env.GKE_LOCATION }}
+
+      - name: Install SOPS
+        working-directory: ${{ runner.temp }}
+        run: |
+          binary="sops-v${SOPS_VERSION}.linux.amd64"
+          release="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}"
+          curl --fail --silent --show-error --location "$release/$binary" --output "$binary"
+          curl --fail --silent --show-error --location \
+            "$release/sops-v${SOPS_VERSION}.checksums.txt" --output sops-checksums.txt
+          grep -E "[[:space:]]+${binary//./\\.}$" sops-checksums.txt | sha256sum --check --strict -
+          install -m 0755 "$binary" "$RUNNER_TEMP/sops"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Decrypt backend database Secret
+        env:
+          SOPS_AGE_KEY: ${{ secrets.AGE_SECRET_KEY }}
+        run: |
+          test -n "$SOPS_AGE_KEY" || {
+            echo "AGE_SECRET_KEY is missing from the GKE_PROJECT environment"
+            exit 1
+          }
+          umask 077
+          sops --decrypt ../todo_backend/manifests/secret.enc.yaml \
+            > ../todo_backend/manifests/secret.yaml
+
+      - name: Deploy
+        run: |
+          kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG"
+          (cd ../todo_backend && kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG")
+          kustomize build . | kubectl apply -f -
+          kubectl --namespace "$NAMESPACE" rollout status statefulset/todo-postgres --timeout=30m
+          kubectl --namespace "$NAMESPACE" rollout status deployment/todo-backend-dep --timeout=30m
+          kubectl --namespace "$NAMESPACE" rollout status "deployment/project-dep" --timeout=30m
+          kubectl --namespace "$NAMESPACE" get services -o wide
+
+      - name: Remove decrypted Secret
+        if: always()
+        run: rm -f ../todo_backend/manifests/secret.yaml

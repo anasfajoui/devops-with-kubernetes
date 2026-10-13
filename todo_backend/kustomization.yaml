@@ -11,4 +11,3 @@ resources:
   - manifests/cronjob.yaml
 images:
   - name: TODO/IMAGE
-    newName: fajouianas/devops-with-kubernetes:3.05-todo-backend

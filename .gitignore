@@ -1,4 +1,3 @@
-age-key-fedora.txt
-age-key-windows.txt
+age-key-*.txt
 ping_pong/manifests/secret.yaml
 todo_backend/manifests/secret.yaml

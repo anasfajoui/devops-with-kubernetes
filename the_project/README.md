@@ -1,4 +1,4 @@
-## The project
+## The Project
 
 - The form sends new todos (limited to 140 characters) to the Todo Backend service.
 - The list of todos is fetched from the Todo Backend service.
@@ -7,22 +7,9 @@
 
 ### Deployment
 
-The root `kustomization.yaml` combines the Todo App, Todo Backend, PostgreSQL, hourly CronJob, image-cache PVC, and project namespace.
+The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project Docker images to Google Artifact Registry, and deploys the app, backend, PostgreSQL, and hourly CronJob to GKE. It runs when either service changes and can also be started manually.
 
-First, you need to decrypted database Secret first:
-
-```sh
-export SOPS_AGE_KEY_FILE=/path/to/your/age-private-key.txt
-sops --decrypt ../todo_backend/manifests/secret.enc.yaml >../todo_backend/manifests/secret.yaml
-```
-
-The Secret is managed separately because Kustomize does not decrypt SOPS files. Then deploy all project resources with Kustomize:
-
-```sh
-kubectl apply -k .
-```
-
-Find the ingress address:
+Wait for the workflow to finish, then find the ingress address:
 
 ```sh
 kubectl -n project get ingress --watch
