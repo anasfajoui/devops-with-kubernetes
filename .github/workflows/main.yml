@@ -191,13 +191,18 @@ jobs:
 
       - name: Deploy
         run: |
+          if [[ "$GITHUB_REF_NAME" != "main" ]]; then
+            NAMESPACE="$GITHUB_REF_NAME"
+          fi
+          kustomize edit set namespace "$NAMESPACE"
           kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG"
           (cd ../todo_backend && kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG")
           kustomize build . | kubectl apply -f -
-          kubectl --namespace "$NAMESPACE" rollout status statefulset/todo-postgres --timeout=30m
-          kubectl --namespace "$NAMESPACE" rollout status deployment/todo-backend-dep --timeout=30m
-          kubectl --namespace "$NAMESPACE" rollout status "deployment/project-dep" --timeout=30m
-          kubectl --namespace "$NAMESPACE" get services -o wide
+          kubectl config set-context --current --namespace="$NAMESPACE"
+          kubectl rollout status statefulset/todo-postgres --timeout=30m
+          kubectl rollout status deployment/todo-backend-dep --timeout=30m
+          kubectl rollout status "deployment/project-dep" --timeout=30m
+          kubectl get services -o wide
 
       - name: Remove decrypted Secret
         if: always()
