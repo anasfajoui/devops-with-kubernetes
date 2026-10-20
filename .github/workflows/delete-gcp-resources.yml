@@ -1,0 +1,86 @@
+name: Delete GKE cluster and images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-application
+  cancel-in-progress: false
+  queue: max
+
+env:
+  GKE_CLUSTER: dwk-cluster
+  GKE_LOCATION: europe-west1-b
+  REGISTRY: europe-west1-docker.pkg.dev
+  ARTIFACT_LOCATION: europe-west1
+  REPOSITORY: dwk-repository
+  PROJECT_IMAGE: the-project
+  TODO_BACKEND_IMAGE: todo-backend
+
+jobs:
+  delete-gcp-resources:
+    name: Delete cluster and application images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: GKE_PROJECT
+    env:
+      PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Delete GKE cluster
+        run: |
+          existing_cluster="$(gcloud container clusters list \
+            --project "$PROJECT_ID" \
+            --zone "$GKE_LOCATION" \
+            --filter "name=$GKE_CLUSTER" \
+            --format 'value(name)')"
+
+          if [[ -n "$existing_cluster" ]]; then
+            gcloud container clusters delete "$GKE_CLUSTER" \
+              --project "$PROJECT_ID" \
+              --zone "$GKE_LOCATION" \
+              --quiet
+          else
+            echo "Cluster $GKE_CLUSTER is already absent"
+          fi
+
+      - name: Delete application images
+        run: |
+          existing_images="$(gcloud artifacts packages list \
+            --project "$PROJECT_ID" \
+            --location "$ARTIFACT_LOCATION" \
+            --repository "$REPOSITORY" \
+            --format 'value(name.basename())')"
+
+          for image in "$PROJECT_IMAGE" "$TODO_BACKEND_IMAGE"; do
+            if ! grep -Fxq "$image" <<< "$existing_images"; then
+              echo "Image $image is already absent"
+              continue
+            fi
+
+            gcloud artifacts docker images delete \
+              "$REGISTRY/$PROJECT_ID/$REPOSITORY/$image" \
+              --project "$PROJECT_ID" \
+              --delete-tags \
+              --quiet
+          done

@@ -16,6 +16,7 @@ permissions:
 concurrency:
   group: release-application
   cancel-in-progress: false
+  queue: max
 
 env:
   GKE_CLUSTER: dwk-cluster
@@ -24,7 +25,7 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   REPOSITORY: dwk-repository
   SOPS_VERSION: "3.13.3"
-  NAMESPACE: project
+  NAMESPACE: ${{ github.event.ref }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
 
@@ -191,8 +192,8 @@ jobs:
 
       - name: Deploy
         run: |
-          if [[ "$GITHUB_REF_NAME" != "main" ]]; then
-            NAMESPACE="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            NAMESPACE="project"
           fi
           kustomize edit set namespace "$NAMESPACE"
           kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG"
