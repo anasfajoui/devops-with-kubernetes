@@ -7,7 +7,7 @@
 
 ### Deployment
 
-The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project Docker images to Google Artifact Registry, and deploys the app, backend, PostgreSQL, and hourly CronJob to GKE. It runs when either service changes and can also be started manually.
+The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project and the todo backend.
 
 Wait for the workflow to finish, then find the ingress address:
 
@@ -26,6 +26,53 @@ The app should be available at http://<INGRESS_ADDRESS>/ once the IP address is 
 - `GET /todos` returns the list of todos as JSON.
 - `POST /todos` accepts `{ "todo": "Learn Kubernetes" }` and creates a todo.
 - `POST /todos/shutdown` shuts down the process so Kubernetes can restart the container.
+
+### Daily DB backups
+
+The backup CronJob uses `pg_dump` to write a plain SQL dump into a shared temporary volume. Once the dump succeeds, the upload container sends the completed file to Cloud Storage with `gcloud storage cp`. A failed dump prevents the upload container from starting.
+
+#### GCP one-time setup
+
+1. Deploy through the `Release application` workflow first. Then:
+
+```sh
+PROJECT_ID="<PROJECT_ID>"
+BUCKET_NAME="${PROJECT_ID}-todo-backups"
+NAMESPACE="project"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+
+gcloud container clusters get-credentials dwk-cluster \
+  --zone=europe-west1-b --project="$PROJECT_ID"
+```
+
+2. Create the bucket and grant access to the backup ServiceAccount in the selected namespace:
+
+```sh
+gcloud storage buckets create "gs://$BUCKET_NAME" \
+  --project="$PROJECT_ID" --location=europe-west1 \
+  --uniform-bucket-level-access
+
+BACKUP_PRINCIPAL="principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${PROJECT_ID}.svc.id.goog/subject/ns/${NAMESPACE}/sa/todo-db-backup"
+
+for BACKUP_ROLE in roles/storage.objectCreator roles/storage.objectViewer; do
+  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_NAME" \
+    --member="$BACKUP_PRINCIPAL" --role="$BACKUP_ROLE" --condition=None
+done
+```
+
+Main uses `project`. For another branch environment, set `NAMESPACE` to its namespace and repeat the IAM grants.
+
+#### Test backup
+
+Start a Job from the CronJob to check the setup:
+
+```sh
+JOB_NAME="todo-db-backup-manual-$(date -u +%Y%m%d%H%M%S)"
+kubectl -n "$NAMESPACE" create job "$JOB_NAME" --from=cronjob/todo-db-backup
+kubectl -n "$NAMESPACE" wait --for=condition=complete "job/$JOB_NAME" --timeout=10m
+kubectl -n "$NAMESPACE" logs "job/$JOB_NAME" -c upload
+gcloud storage ls "gs://$BUCKET_NAME/$NAMESPACE/"
+```
 
 ### DBaaS vs DIY
 

@@ -25,7 +25,7 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   REPOSITORY: dwk-repository
   SOPS_VERSION: "3.13.3"
-  NAMESPACE: ${{ github.event.ref }}
+  NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
 
@@ -68,6 +68,8 @@ jobs:
               --project "$PROJECT_ID" \
               --zone "$GKE_LOCATION" \
               --cluster-version "$GKE_CLUSTER_VERSION" \
+              --workload-pool "$PROJECT_ID.svc.id.goog" \
+              --workload-metadata GKE_METADATA \
               --disk-size 32 \
               --num-nodes 4 \
               --machine-type e2-small \
@@ -197,12 +199,18 @@ jobs:
           fi
           kustomize edit set namespace "$NAMESPACE"
           kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG"
-          (cd ../todo_backend && kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG")
+          (
+            cd ../todo_backend
+            kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG"
+            kustomize edit add configmap todo-backup-config \
+              --behavior=merge \
+              --from-literal="GCS_BUCKET=${PROJECT_ID}-todo-backups"
+          )
           kustomize build . | kubectl apply -f -
           kubectl config set-context --current --namespace="$NAMESPACE"
-          kubectl rollout status statefulset/todo-postgres --timeout=30m
-          kubectl rollout status deployment/todo-backend-dep --timeout=30m
-          kubectl rollout status "deployment/project-dep" --timeout=30m
+          kubectl rollout status statefulset/todo-postgres
+          kubectl rollout status deployment/todo-backend-dep
+          kubectl rollout status "deployment/project-dep"
           kubectl get services -o wide
 
       - name: Remove decrypted Secret

@@ -9,5 +9,8 @@ resources:
   - manifests/postgres-service.yaml
   - manifests/postgres-statefulset.yaml
   - manifests/cronjob.yaml
+  - manifests/backup-configmap.yaml
+  - manifests/backup-serviceaccount.yaml
+  - manifests/backup-cronjob.yaml
 images:
   - name: TODO/IMAGE

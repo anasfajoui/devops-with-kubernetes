@@ -1,4 +1,4 @@
-name: Delete GKE cluster and images
+name: Delete GKE cluster, images and backups
 
 on:
   workflow_dispatch:
@@ -84,3 +84,61 @@ jobs:
               --delete-tags \
               --quiet
           done
+
+  delete-backups:
+    name: Empty backup bucket
+    needs: delete-gcp-resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: GKE_PROJECT
+    env:
+      PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Delete backup objects
+        run: |
+          bucket_name="${PROJECT_ID}-todo-backups"
+          bucket_url="gs://${bucket_name}"
+          existing_bucket="$(gcloud storage buckets list \
+            --project "$PROJECT_ID" \
+            --filter "name=$bucket_name" \
+            --format 'value(name)')"
+
+          if [[ -z "$existing_bucket" ]]; then
+            echo "Backup bucket $bucket_name is already absent"
+            exit 0
+          fi
+
+          existing_objects="$(gcloud storage ls "$bucket_url/" \
+            --project "$PROJECT_ID" \
+            --all-versions)"
+
+          if [[ -z "$existing_objects" ]]; then
+            echo "Backup bucket $bucket_name is already empty"
+            exit 0
+          fi
+
+          # Target objects only: keep the bucket and its IAM grants.
+          gcloud storage rm "$bucket_url/**" \
+            --project "$PROJECT_ID" \
+            --all-versions \
+            --quiet
+
+          echo "Deleted backups"
+          echo "Soft-deleted objects remain billable until their retention period expires"

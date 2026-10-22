@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  namespace: project
+  name: todo-db-backup
+spec:
+  schedule: "0 0 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          serviceAccountName: todo-db-backup
+          nodeSelector:
+            iam.gke.io/gke-metadata-server-enabled: "true"
+          restartPolicy: Never
+          initContainers:
+            - name: pg-dump
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  pg_dump --no-password --no-owner --no-privileges \
+                    --file=/backup/todos.sql
+              env:
+                - name: PGHOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: PGHOST
+                - name: PGPORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: PGPORT
+                - name: PGDATABASE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: PGDATABASE
+                - name: PGUSER
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backend-config
+                      key: PGUSER
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: todo-backend-db-secret
+                      key: PGPASSWORD
+                - name: PGCONNECT_TIMEOUT
+                  value: "10"
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          containers:
+            - name: upload
+              image: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  test -s /backup/todos.sql
+                  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+                  destination="gs://${GCS_BUCKET}/${POD_NAMESPACE}/todos-${timestamp}-${POD_NAME}.sql"
+                  gcloud storage cp /backup/todos.sql "$destination" \
+                    --content-type=application/sql --if-generation-match=0
+                  echo "Backup uploaded to $destination"
+              env:
+                - name: GCS_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-backup-config
+                      key: GCS_BUCKET
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: CLOUDSDK_CONFIG
+                  value: /tmp/gcloud
+                - name: CLOUDSDK_CORE_DISABLE_PROMPTS
+                  value: "1"
+                - name: CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED
+                  value: "False"
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+          volumes:
+            - name: backup
+              emptyDir: {}

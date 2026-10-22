@@ -2,11 +2,12 @@
 
 - Each completed request writes one JSON log line to stdout with its timestamp, method, path, HTTP status, and duration. `POST /todos` logs also include the submitted todo, and whether it was accepted, rejected, or failed. Rejected todos include the reason and use the `warn` level.
 - The backend enforces `MAX_TODO_LENGTH=140` from the ConfigMap before accessing the database. To submit a 141-character todo through the ingress, you may use the `requests.http` file.
-- The cronjob adds a random Wikipedia todo every hour.
+- A cronjob adds a random Wikipedia todo every hour.
+- Another CronJob backs up the todo database to Cloud Storage every day at 00:00 UTC.
 
 ### Deployment
 
-The project's Kustomize configuration includes this backend, ingress, PostgreSQL, the namespace, and the hourly CronJob.
+The project's Kustomize configuration includes this backend, ingress, PostgreSQL, the namespace, the hourly todo CronJob and the daily backup CronJob.
 
 First, you need to decrypted database Secret first:
 
