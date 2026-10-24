@@ -27,6 +27,10 @@ The app should be available at http://<INGRESS_ADDRESS>/ once the IP address is 
 - `POST /todos` accepts `{ "todo": "Learn Kubernetes" }` and creates a todo.
 - `POST /todos/shutdown` shuts down the process so Kubernetes can restart the container.
 
+### Todo creation logs in GKE
+
+![Successful todo creation in GKE Logs Explorer](todo-created.png)
+
 ### Daily DB backups
 
 The backup CronJob uses `pg_dump` to write a plain SQL dump into a shared temporary volume. Once the dump succeeds, the upload container sends the completed file to Cloud Storage with `gcloud storage cp`. A failed dump prevents the upload container from starting.
