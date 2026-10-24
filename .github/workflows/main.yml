@@ -71,7 +71,10 @@ jobs:
               --workload-pool "$PROJECT_ID.svc.id.goog" \
               --workload-metadata GKE_METADATA \
               --disk-size 32 \
-              --num-nodes 4 \
+              --num-nodes 1 \
+              --enable-autoscaling \
+              --min-nodes 1 \
+              --max-nodes 4 \
               --machine-type e2-small \
               --quiet
           else
