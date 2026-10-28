@@ -18,6 +18,12 @@ const pool = new Pool({
   database: requiredEnvironmentVariable('PGDATABASE'),
   user: requiredEnvironmentVariable('PGUSER'),
   password: requiredEnvironmentVariable('PGPASSWORD'),
+  connectionTimeoutMillis: 3_000,
+  query_timeout: 2_000,
+});
+
+pool.on('error', error => {
+  console.error('Unexpected PostgreSQL connection error:', error);
 });
 
 let databaseInitialization;
@@ -53,6 +59,18 @@ const handleRequest = async (req, res) => {
   }
 
   const requestPath = req.url.split('?')[0];
+
+  if (requestPath === '/readyz') {
+    try {
+      await pool.query('SELECT 1');
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Ready');
+    } catch {
+      res.writeHead(503, { 'Content-Type': 'text/plain' });
+      res.end('Database is not available');
+    }
+    return;
+  }
 
   if (requestPath === '/') {
     await initializeDatabase();

@@ -39,6 +39,18 @@ app.use(async ctx => {
     return
   }
 
+  if (ctx.path === '/readyz') {
+    try {
+      await readPingPongCount()
+      ctx.status = 200
+      ctx.body = 'Ready\n'
+    } catch {
+      ctx.status = 503
+      ctx.body = 'Ping Pong is not available\n'
+    }
+    return
+  }
+
   let fileContent
   let information
 

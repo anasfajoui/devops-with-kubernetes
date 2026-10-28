@@ -8,3 +8,7 @@ Accept: text/plain
 GET {{baseUrl}}/pings
 Accept: text/plain
 
+### Check readiness: PostgreSQL connection
+GET {{baseUrl}}/pingpong/readyz
+Accept: text/plain
+

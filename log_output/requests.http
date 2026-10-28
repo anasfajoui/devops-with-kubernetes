@@ -4,3 +4,6 @@
 GET {{baseUrl}}/
 Accept: text/plain
 
+### Check readiness: data from Ping Pong
+GET {{baseUrl}}/readyz
+Accept: text/plain

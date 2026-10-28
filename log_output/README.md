@@ -7,6 +7,7 @@
 ### Endpoints
 
 - `GET /` returns the configured file and environment values, latest timestamped log output, and pong count fetched from the Ping Pong application.
+- `GET /readyz` returns `200` when the reader can fetch a valid counter from Ping Pong's `/pings` endpoint, or `503` if the request fails, times out or returns invalid data. This will be used mainly for K8s Readiness probe.
 
 ### Deployment
 

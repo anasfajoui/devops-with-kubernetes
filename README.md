@@ -43,3 +43,7 @@
 - [3.10.](https://github.com/anasfajoui/devops-with-kubernetes/tree/3.10/the_project)
 - [3.11.](https://github.com/anasfajoui/devops-with-kubernetes/tree/3.11/the_project)
 - [3.12.](https://github.com/anasfajoui/devops-with-kubernetes/tree/3.12/the_project)
+
+## Chapter 5: GitOps and friends
+
+- [4.1.](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.1/log_output)
