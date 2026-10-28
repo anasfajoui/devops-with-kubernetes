@@ -6,6 +6,8 @@ on:
       - ".github/workflows/main.yml"
       - "the_project/**"
       - "todo_backend/**"
+      - "log_output/**"
+      - "ping_pong/**"
       - ".sops.yaml"
   workflow_dispatch:
 
@@ -28,6 +30,9 @@ env:
   NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
+  LOG_OUTPUT_WRITER_IMAGE: log-output-writer
+  LOG_OUTPUT_READER_IMAGE: log-output-reader
+  PING_PONG_IMAGE: ping-pong
 
 jobs:
   ensure-cluster:
@@ -70,6 +75,7 @@ jobs:
               --cluster-version "$GKE_CLUSTER_VERSION" \
               --workload-pool "$PROJECT_ID.svc.id.goog" \
               --workload-metadata GKE_METADATA \
+              --gateway-api standard \
               --disk-size 32 \
               --num-nodes 1 \
               --enable-autoscaling \
@@ -101,7 +107,7 @@ jobs:
           exit 1
 
   build-publish-deploy:
-    name: Build, publish and deploy Todo App
+    name: Build, publish and deploy applications
     needs: ensure-cluster
     runs-on: ubuntu-latest
     environment: GKE_PROJECT
@@ -125,6 +131,15 @@ jobs:
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
           printf 'TODO_BACKEND_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
             "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$TODO_BACKEND_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          printf 'LOG_OUTPUT_WRITER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$LOG_OUTPUT_WRITER_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          printf 'LOG_OUTPUT_READER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$LOG_OUTPUT_READER_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          printf 'PING_PONG_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$PING_PONG_IMAGE" \
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
 
       - name: Authenticate to Google Cloud
@@ -161,6 +176,33 @@ jobs:
           provenance: false
           tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
 
+      - name: Build and push Log Output writer image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./log_output
+          file: ./log_output/Dockerfile.writer
+          push: true
+          provenance: false
+          tags: ${{ env.LOG_OUTPUT_WRITER_IMAGE_TAG }}
+
+      - name: Build and push Log Output reader image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./log_output
+          file: ./log_output/Dockerfile.reader
+          push: true
+          provenance: false
+          tags: ${{ env.LOG_OUTPUT_READER_IMAGE_TAG }}
+
+      - name: Build and push Ping Pong image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./ping_pong
+          file: ./ping_pong/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ env.PING_PONG_IMAGE_TAG }}
+
       - name: Set up Kustomize
         uses: imranismail/setup-kustomize@v3
 
@@ -170,6 +212,34 @@ jobs:
           cluster_name: ${{ env.GKE_CLUSTER }}
           project_id: ${{ env.PROJECT_ID }}
           location: ${{ env.GKE_LOCATION }}
+
+      - name: Ensure Gateway API is ready
+        run: |
+          gateway_channel="$(gcloud container clusters describe "$GKE_CLUSTER" \
+            --project "$PROJECT_ID" \
+            --zone "$GKE_LOCATION" \
+            --format 'value(networkConfig.gatewayApiConfig.channel)')"
+          if [[ "$gateway_channel" != "CHANNEL_STANDARD" ]]; then
+            gcloud container clusters update "$GKE_CLUSTER" \
+              --project "$PROJECT_ID" \
+              --zone "$GKE_LOCATION" \
+              --gateway-api standard \
+              --quiet
+          fi
+
+          deadline=$((SECONDS + 2700))
+          until kubectl get gatewayclass gke-l7-global-external-managed >/dev/null 2>&1 && \
+            kubectl wait --for=condition=Established --timeout=20s \
+              crd/gateways.gateway.networking.k8s.io \
+              crd/httproutes.gateway.networking.k8s.io \
+              crd/healthcheckpolicies.networking.gke.io >/dev/null 2>&1; do
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for the GKE Gateway API resources"
+              exit 1
+            fi
+            echo "Waiting for GKE Gateway API resources and GatewayClass"
+            sleep 20
+          done
 
       - name: Install SOPS
         working-directory: ${{ runner.temp }}
@@ -183,7 +253,7 @@ jobs:
           install -m 0755 "$binary" "$RUNNER_TEMP/sops"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
-      - name: Decrypt backend database Secret
+      - name: Decrypt Secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.AGE_SECRET_KEY }}
         run: |
@@ -194,8 +264,10 @@ jobs:
           umask 077
           sops --decrypt ../todo_backend/manifests/secret.enc.yaml \
             > ../todo_backend/manifests/secret.yaml
+          sops --decrypt ../ping_pong/manifests/secret.enc.yaml \
+            > ../ping_pong/manifests/secret.yaml
 
-      - name: Deploy
+      - name: Deploy Todo App
         run: |
           if [[ "$GITHUB_REF_NAME" == "main" ]]; then
             NAMESPACE="project"
@@ -216,6 +288,73 @@ jobs:
           kubectl rollout status "deployment/project-dep"
           kubectl get services -o wide
 
-      - name: Remove decrypted Secret
+      - name: Deploy Ping Pong App
+        working-directory: ./log_output
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            NAMESPACE="exercises"
+          fi
+          kustomize edit set namespace "$NAMESPACE"
+          kustomize edit set image "LOG/WRITER=$LOG_OUTPUT_WRITER_IMAGE_TAG"
+          kustomize edit set image "LOG/READER=$LOG_OUTPUT_READER_IMAGE_TAG"
+          (
+            cd ../ping_pong
+            kustomize edit set image "PING/PONG=$PING_PONG_IMAGE_TAG"
+          )
+          kustomize build . | kubectl apply -f -
+          kubectl -n "$NAMESPACE" rollout status statefulset/postgres
+          kubectl -n "$NAMESPACE" rollout status deployment/ping-pong-dep
+          kubectl -n "$NAMESPACE" rollout status deployment/log-output-dep
+          kubectl -n "$NAMESPACE" get services -o wide
+          kubectl -n "$NAMESPACE" get gateway log-output-ping-pong-gateway
+
+      - name: Remove decrypted Secrets
         if: always()
-        run: rm -f ../todo_backend/manifests/secret.yaml
+        run: |
+          rm -f ../todo_backend/manifests/secret.yaml ../ping_pong/manifests/secret.yaml
+
+      - name: Deployment summary
+        timeout-minutes: 16
+        run: |
+          todo_namespace="$NAMESPACE"
+          exercises_namespace="$NAMESPACE"
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            todo_namespace="project"
+            exercises_namespace="exercises"
+          fi
+
+          ingress_ip=""
+          gateway_ip=""
+          deadline=$((SECONDS + 900))
+          while (( SECONDS < deadline )); do
+            ingress_ip="$(kubectl -n "$todo_namespace" get ingress project-todo-ingress \
+              --request-timeout=15s -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')"
+            gateway_ip="$(kubectl -n "$exercises_namespace" get gateways.gateway.networking.k8s.io \
+              log-output-ping-pong-gateway --request-timeout=15s \
+              -o 'jsonpath={.status.addresses[0].value}')"
+            if [[ -n "$ingress_ip" && -n "$gateway_ip" ]]; then
+              break
+            fi
+            echo "Waiting for load balancer IPs: ingress=${ingress_ip:-pending}, gateway=${gateway_ip:-pending}"
+            sleep 20
+          done
+
+          {
+            printf '## Deployment endpoints\n\n'
+            printf 'Cluster: `%s` | Branch: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_NAME"
+            printf '### Todo App\n\nNamespace: `%s`\n\n' "$todo_namespace"
+            if [[ -n "$ingress_ip" ]]; then
+              printf -- '- Ingress IP: `%s`\n' "$ingress_ip"
+              printf -- '- Todo App: [http://%s/](http://%s/)\n' "$ingress_ip" "$ingress_ip"
+            else
+              printf 'Ingress IP is still pending. Check with:\n\n```sh\nkubectl -n %s get ingress project-todo-ingress\n```\n' "$todo_namespace"
+            fi
+            printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$exercises_namespace"
+            if [[ -n "$gateway_ip" ]]; then
+              printf -- '- Gateway IP: `%s`\n' "$gateway_ip"
+              printf -- '- Log Output: [http://%s/](http://%s/)\n' "$gateway_ip" "$gateway_ip"
+              printf -- '- Ping Pong: [http://%s/pingpong](http://%s/pingpong)\n' "$gateway_ip" "$gateway_ip"
+            else
+              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io log-output-ping-pong-gateway\n```\n' "$exercises_namespace"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

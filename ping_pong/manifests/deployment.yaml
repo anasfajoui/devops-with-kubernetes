@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: ping-pong
-          image: fajouianas/devops-with-kubernetes:3.04-pingpong
+          image: PING/PONG
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

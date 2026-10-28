@@ -10,14 +10,9 @@
 
 ### Deployment
 
-Create the shared namespace, then deploy:
+The [Release application workflow](../.github/workflows/main.yml) deploys both log output and ping-pong apps.
 
-```bash
-kubectl apply -f manifests/namespace.yaml
-kubectl apply -f manifests
-```
-
-This app shares a Gateway with Ping Pong app. Deploy Ping Pong app using the instructions in `../ping_pong/README.md`.
+### Gateway address
 
 Find the Gateway address:
 

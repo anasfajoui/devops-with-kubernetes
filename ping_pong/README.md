@@ -9,33 +9,9 @@ The Gateway accepts `GET /pingpong` and rewrites its path to `/` before forwardi
 
 ### Deployment
 
-Create the shared namespace first:
+The [Release application workflow](../.github/workflows/main.yml) deploys both ping-pong and log output apps.
 
-```bash
-kubectl apply -f ../log_output/manifests/namespace.yaml
-```
-
-`manifests/secret.enc.yaml` is encrypted with SOPS and must be decrypted before K8s can use it:
-
-```bash
-export SOPS_AGE_KEY_FILE=/path/to/your/age-private-key.txt
-sops --decrypt manifests/secret.enc.yaml | kubectl apply -f -
-```
-
-Then apply the remaining unencrypted manifests explicitly:
-
-```bash
-kubectl apply \
-  -f manifests/configmap.yaml \
-  -f manifests/postgres-service.yaml \
-  -f manifests/postgres-statefulset.yaml \
-  -f manifests/service.yaml \
-  -f manifests/deployment.yaml \
-  -f manifests/healthcheckpolicy.yaml \
-  -f manifests/route.yaml
-```
-
-This app shares a Gateway with Log Output app. Apply its Gateway and route with `kubectl apply -f ../log_output/manifests`.
+### Gateway address
 
 Wait for PostgreSQL and Ping-pong to start, then find the Gateway address:
 

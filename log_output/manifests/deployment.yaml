@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: output-writer
-          image: fajouianas/devops-with-kubernetes:2.01-writer
+          image: LOG/WRITER
           imagePullPolicy: Always
           env:
             - name: LOG_FILE_PATH
@@ -24,7 +24,7 @@ spec:
             - name: shared-logs
               mountPath: /shared
         - name: output-reader
-          image: fajouianas/devops-with-kubernetes:2.05-reader
+          image: LOG/READER
           imagePullPolicy: Always
           env:
             - name: LOG_FILE_PATH
