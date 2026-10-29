@@ -5,7 +5,7 @@ resources:
   - manifests/configmap.yaml
   - manifests/secret.yaml
   - manifests/postgres-service.yaml
-  # - manifests/postgres-statefulset.yaml Test for readiness probe without DB
+  - manifests/postgres-statefulset.yaml
   - manifests/deployment.yaml
   - manifests/service.yaml
   - manifests/healthcheckpolicy.yaml
