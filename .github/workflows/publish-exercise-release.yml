@@ -39,7 +39,21 @@ jobs:
             exit 0
           fi
 
+          exercise_title="$(awk -v prefix="- [$exercise. " '
+            index($0, prefix) == 1 {
+              title = substr($0, length(prefix) + 1)
+              sub(/\]\(.*/, "", title)
+              print title
+              exit
+            }
+          ' README.md)"
+
+          if [[ -z "$exercise_title" ]]; then
+            echo "No title found for exercise $exercise in README.md." >&2
+            exit 1
+          fi
+
           gh release create "$exercise" \
             --target "$COMMIT_SHA" \
             --title "$exercise" \
-            --notes ""
+            --notes "$exercise_title"
