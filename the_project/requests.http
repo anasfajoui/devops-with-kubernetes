@@ -1,4 +1,4 @@
-@baseUrl = http://<INGRESS_ADDRESS>:3000
+@baseUrl = http://<INGRESS_ADDRESS>
 
 ### Display the todo application
 GET {{baseUrl}}/
@@ -10,4 +10,16 @@ Accept: image/jpeg
 
 ### Shut down the application process
 POST {{baseUrl}}/shutdown
+
+### Check liveness
+GET {{baseUrl}}/healthz
+Accept: application/json
+
+### Check readiness: backend and database connection
+GET {{baseUrl}}/readyz
+Accept: application/json
+
+### Break the application until the liveness probe restarts its container
+POST {{baseUrl}}/break
+Accept: text/html
 

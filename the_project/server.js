@@ -37,6 +37,38 @@ const createRandomString = () => Math.random().toString(36).slice(2, 8)
 const startingString = createRandomString()
 let refreshPromise
 let server
+let isHealthy = true
+
+const failurePage = `
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Todo App — System Failure</title>
+      <style>
+        body { background: #fff7f7; color: #922020; font-family: Arial, sans-serif; padding: 2rem 1rem; }
+        main { background: #ffe6e6; border: 1px solid #e7aaaa; border-radius: 0.75rem; margin: 0 auto; max-width: 60rem; padding: 2rem; text-align: center; }
+        h1 { font-size: 3rem; margin-top: 0; }
+        p { font-size: 1.25rem; }
+      </style>
+    </head>
+    <body>
+      <main role="alert">
+        <h1>System Failure</h1>
+        <p>The Todo App is currently unhealthy. Please wait for recovery.</p>
+      </main>
+      <script>
+        setInterval(async () => {
+          try {
+            const response = await fetch('/healthz', { cache: 'no-store' })
+            if (response.ok) window.location.replace('/')
+          } catch {}
+        }, 2000)
+      </script>
+    </body>
+  </html>
+`
 
 const escapeHtml = value =>
   value
@@ -161,6 +193,42 @@ const shutDown = signal => {
 }
 
 app.use(async ctx => {
+  if (ctx.path === '/healthz' && ctx.method === 'GET') {
+    ctx.status = isHealthy ? 200 : 500
+    ctx.body = { status: isHealthy ? 'ok' : 'unhealthy' }
+    return
+  }
+
+  if (ctx.path === '/readyz' && ctx.method === 'GET') {
+    ctx.status = 503
+    ctx.body = { status: 'unhealthy' }
+
+    if (!isHealthy) return
+
+    try {
+      const response = await fetch(`${TODO_BACKEND_URL.replace(/\/$/, '')}/readyz`, {
+        signal: AbortSignal.timeout(TODO_BACKEND_TIMEOUT_MS),
+      })
+      if (response.ok) {
+        ctx.status = 200
+        ctx.body = { status: 'ok' }
+      }
+    } catch {}
+    return
+  }
+
+  if (ctx.path === '/break' && ctx.method === 'POST') {
+    isHealthy = false
+  }
+
+  if (!isHealthy) {
+    ctx.status = 503
+    ctx.type = 'html'
+    ctx.set('Cache-Control', 'no-store')
+    ctx.body = failurePage
+    return
+  }
+
   if (ctx.path === '/image' && ctx.method === 'GET') {
     await serveImage(ctx)
     return
@@ -313,6 +381,9 @@ app.use(async ctx => {
           <h2>Todos</h2>
           <ul class="todos">${todoItems}</ul>
           <div class="shutdown-actions">
+            <form method="post" action="/break">
+              <button type="submit">Break the app</button>
+            </form>
             <form method="post" action="/shutdown">
               <button type="submit">Shut down Todo App</button>
             </form>

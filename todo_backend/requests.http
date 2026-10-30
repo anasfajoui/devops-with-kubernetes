@@ -24,3 +24,11 @@ Accept: application/json
 
 ### Shut down the Todo Backend process
 POST {{baseUrl}}/shutdown
+
+### Check liveness
+GET {{baseUrl}}/healthz
+Accept: application/json
+
+### Check readiness: PostgreSQL connection
+GET {{baseUrl}}/readyz
+Accept: application/json

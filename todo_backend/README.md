@@ -42,3 +42,5 @@ The app should be available at http://<INGRESS_ADDRESS>/ once the IP address is 
 - `GET /todos` returns the list of todos as JSON.
 - `POST /todos` accepts `{ "todo": "Learn Kubernetes" }` and creates a todo.
 - `POST /todos/shutdown` shuts down the process so Kubernetes can restart the container.
+- `GET /todos/healthz` returns 200 when the HTTP server responds, independently of PostgreSQL.
+- `GET /todos/readyz` runs a fresh `SELECT 1` query and returns 200 on success or 503 if PostgreSQL is unavailable.

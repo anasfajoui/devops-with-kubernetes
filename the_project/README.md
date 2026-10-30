@@ -4,6 +4,7 @@
 - The list of todos is fetched from the Todo Backend service.
 - The random image is persistently cached.
 - The shutdown buttons exit either the Todo App or Todo Backend process so K8s restarts the selected container. The cached image and PostgreSQL-backed todos persist across application restarts.
+- The **Break the app** button stops normal operation until the liveness probe restarts the frontend container.
 
 ### Deployment
 
@@ -21,6 +22,9 @@ The app should be available at http://<INGRESS_ADDRESS>/ once the IP address is 
 
 - `GET /` — displays the todo application.
 - `GET /image` — serves the persistently cached Lorem Picsum image.
+- `GET /healthz` — returns 200 while healthy and 500 after breaking the app.
+- `GET /readyz` — returns 200 when the app is healthy and the backend can query PostgreSQL, otherwise 503.
+- `POST /break` — marks the app unhealthy and displays the failure page without exiting the process.
 - `POST /shutdown` — shuts down the Node process so Kubernetes can restart the container.
 
 - `GET /todos` returns the list of todos as JSON.

@@ -26,7 +26,14 @@ const pool = new Pool({
   database: requireEnv('PGDATABASE'),
   user: requireEnv('PGUSER'),
   password: requireEnv('PGPASSWORD'),
+  connectionTimeoutMillis: 3_000,
+  query_timeout: 2_000,
 })
+
+pool.on('error', error => {
+  console.error('Unexpected PostgreSQL connection error:', error)
+})
+
 const INITIAL_TODOS = [
   'Learn Kubernetes basics',
   'Deploy the application to the cluster',
@@ -112,6 +119,21 @@ const readJsonBody = req =>
 
 const handleRequest = async (req, res, requestLog) => {
   const requestPath = req.url.split('?')[0]
+
+  if (requestPath === '/todos/healthz' && req.method === 'GET') {
+    sendJson(res, 200, { status: 'ok' })
+    return
+  }
+
+  if (requestPath === '/todos/readyz' && req.method === 'GET') {
+    try {
+      await pool.query('SELECT 1')
+      sendJson(res, 200, { status: 'ok' })
+    } catch {
+      sendJson(res, 503, { status: 'unhealthy' })
+    }
+    return
+  }
 
   if (requestPath === '/todos/shutdown' && req.method === 'POST') {
     sendJson(res, 202, {
