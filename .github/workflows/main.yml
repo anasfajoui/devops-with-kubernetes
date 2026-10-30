@@ -287,6 +287,7 @@ jobs:
           kubectl rollout status deployment/todo-backend-dep
           kubectl rollout status "deployment/project-dep"
           kubectl get services -o wide
+          kubectl -n "$NAMESPACE" get gateway project-todo-gateway
 
       - name: Deploy Ping Pong App
         working-directory: ./log_output
@@ -323,19 +324,20 @@ jobs:
             exercises_namespace="exercises"
           fi
 
-          ingress_ip=""
-          gateway_ip=""
+          todo_gateway_ip=""
+          exercises_gateway_ip=""
           deadline=$((SECONDS + 900))
           while (( SECONDS < deadline )); do
-            ingress_ip="$(kubectl -n "$todo_namespace" get ingress project-todo-ingress \
-              --request-timeout=15s -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')"
-            gateway_ip="$(kubectl -n "$exercises_namespace" get gateways.gateway.networking.k8s.io \
+            todo_gateway_ip="$(kubectl -n "$todo_namespace" get gateways.gateway.networking.k8s.io \
+              project-todo-gateway --request-timeout=15s \
+              -o 'jsonpath={.status.addresses[0].value}')"
+            exercises_gateway_ip="$(kubectl -n "$exercises_namespace" get gateways.gateway.networking.k8s.io \
               log-output-ping-pong-gateway --request-timeout=15s \
               -o 'jsonpath={.status.addresses[0].value}')"
-            if [[ -n "$ingress_ip" && -n "$gateway_ip" ]]; then
+            if [[ -n "$todo_gateway_ip" && -n "$exercises_gateway_ip" ]]; then
               break
             fi
-            echo "Waiting for load balancer IPs: ingress=${ingress_ip:-pending}, gateway=${gateway_ip:-pending}"
+            echo "Waiting for Gateway IPs: todo=${todo_gateway_ip:-pending}, exercises=${exercises_gateway_ip:-pending}"
             sleep 20
           done
 
@@ -343,17 +345,16 @@ jobs:
             printf '## Deployment endpoints\n\n'
             printf 'Cluster: `%s` | Branch: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_NAME"
             printf '### Todo App\n\nNamespace: `%s`\n\n' "$todo_namespace"
-            if [[ -n "$ingress_ip" ]]; then
-              printf -- '- Ingress IP: `%s`\n' "$ingress_ip"
-              printf -- '- Todo App: [http://%s/](http://%s/)\n' "$ingress_ip" "$ingress_ip"
+            if [[ -n "$todo_gateway_ip" ]]; then
+              printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
+              printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
             else
-              printf 'Ingress IP is still pending. Check with:\n\n```sh\nkubectl -n %s get ingress project-todo-ingress\n```\n' "$todo_namespace"
+              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io project-todo-gateway\n```\n' "$todo_namespace"
             fi
             printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$exercises_namespace"
-            if [[ -n "$gateway_ip" ]]; then
-              printf -- '- Gateway IP: `%s`\n' "$gateway_ip"
-              printf -- '- Log Output: [http://%s/](http://%s/)\n' "$gateway_ip" "$gateway_ip"
-              printf -- '- Ping Pong: [http://%s/pingpong](http://%s/pingpong)\n' "$gateway_ip" "$gateway_ip"
+            if [[ -n "$exercises_gateway_ip" ]]; then
+              printf -- '- Gateway IP: `%s`\n' "$exercises_gateway_ip"
+              printf -- '- Ping Pong app: [http://%s/](http://%s/)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
             else
               printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io log-output-ping-pong-gateway\n```\n' "$exercises_namespace"
             fi

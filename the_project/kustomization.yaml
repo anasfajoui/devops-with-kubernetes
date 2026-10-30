@@ -9,7 +9,9 @@ resources:
   - manifests/persistentvolumeclaim.yaml
   - manifests/deployment.yaml
   - manifests/service.yaml
-  - manifests/ingress.yaml
+  - manifests/gateway.yaml
+  - manifests/route.yaml
+  - manifests/healthcheckpolicy.yaml
   - ../todo_backend/
 images:
   - name: PROJECT/IMAGE

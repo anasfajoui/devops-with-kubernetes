@@ -6,6 +6,8 @@ resources:
   - manifests/secret.yaml
   - manifests/deployment.yaml
   - manifests/service.yaml
+  - manifests/route.yaml
+  - manifests/healthcheckpolicy.yaml
   - manifests/postgres-service.yaml
   - manifests/postgres-statefulset.yaml
   - manifests/cronjob.yaml
