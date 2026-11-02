@@ -5,11 +5,6 @@ chunksCache:
 resultsCache:
   enabled: false
 
-lokiCanary:
-  enabled: false
-test:
-  enabled: false
-
 singleBinary:
   replicas: 1
 

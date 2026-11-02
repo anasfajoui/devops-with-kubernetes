@@ -1,7 +1,7 @@
 alertmanager:
   enabled: false
 
-pushgateway:
+prometheus-pushgateway:
   enabled: false
 
 server:

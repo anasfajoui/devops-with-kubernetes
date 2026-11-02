@@ -8,6 +8,7 @@ on:
       - "todo_backend/**"
       - "log_output/**"
       - "ping_pong/**"
+      - "monitoring/**"
       - ".sops.yaml"
   workflow_dispatch:
 
@@ -81,7 +82,7 @@ jobs:
               --enable-autoscaling \
               --min-nodes 1 \
               --max-nodes 4 \
-              --machine-type e2-small \
+              --machine-type e2-standard-2 \
               --quiet
           else
             echo "Cluster $GKE_CLUSTER already exists in $GKE_LOCATION"
@@ -206,6 +207,11 @@ jobs:
       - name: Set up Kustomize
         uses: imranismail/setup-kustomize@v3
 
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v3
         with:
@@ -240,6 +246,35 @@ jobs:
             echo "Waiting for GKE Gateway API resources and GatewayClass"
             sleep 20
           done
+
+      - name: Deploy monitoring
+        working-directory: ./monitoring
+        timeout-minutes: 45
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install prom prometheus-community/prometheus \
+            --namespace monitoring --create-namespace \
+            --values prom-values.yaml \
+            --wait
+
+          helm upgrade --install loki grafana/loki \
+            --namespace monitoring \
+            --values loki-values.yaml \
+            --wait
+
+          helm upgrade --install k8smon grafana/k8s-monitoring \
+            --namespace monitoring \
+            --values k8smon-values.yaml \
+            --set-string "cluster.name=$GKE_CLUSTER" \
+            --wait
+
+          helm upgrade --install grafana grafana/grafana \
+            --namespace monitoring \
+            --values grafana-values.yaml \
+            --wait
 
       - name: Install SOPS
         working-directory: ${{ runner.temp }}
@@ -358,4 +393,10 @@ jobs:
             else
               printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io log-output-ping-pong-gateway\n```\n' "$exercises_namespace"
             fi
+            printf '\n### Grafana\n\nNamespace: `monitoring`\n\n'
+            printf 'Run:\n\n```sh\nkubectl port-forward --namespace monitoring svc/grafana 3000:80\n```\n\n'
+            printf 'Then open [http://localhost:3000](http://localhost:3000).\n'
+            printf '\n### Prometheus\n\nNamespace: `monitoring`\n\n'
+            printf 'Run:\n\n```sh\nkubectl port-forward svc/prom-prometheus-server -n monitoring 9090:80\n```\n\n'
+            printf 'Then open [http://localhost:9090](http://localhost:9090).\n'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -48,3 +48,4 @@
 
 - [4.1. Readiness probe](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.1/log_output)
 - [4.2. The project, step 21](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.2/the_project)
+- [4.3. Prometheus](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.3/monitoring)
