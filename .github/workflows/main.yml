@@ -28,6 +28,7 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   REPOSITORY: dwk-repository
   SOPS_VERSION: "3.13.3"
+  ARGO_ROLLOUTS_VERSION: "v1.10.1"
   NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
@@ -276,6 +277,27 @@ jobs:
             --values grafana-values.yaml \
             --wait
 
+      - name: Install Argo Rollouts
+        working-directory: ${{ runner.temp }}
+        run: |
+          release="https://github.com/argoproj/argo-rollouts/releases/download/$ARGO_ROLLOUTS_VERSION"
+          kubectl create namespace argo-rollouts --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply --server-side --namespace argo-rollouts -f "$release/install.yaml"
+          kubectl wait --for=condition=Established --timeout=2m \
+            crd/rollouts.argoproj.io \
+            crd/analysistemplates.argoproj.io \
+            crd/analysisruns.argoproj.io
+          kubectl -n argo-rollouts rollout status deployment/argo-rollouts --timeout=5m
+
+          curl --fail --silent --show-error --location \
+            "$release/kubectl-argo-rollouts-linux-amd64" --output kubectl-argo-rollouts-linux-amd64
+          curl --fail --silent --show-error --location \
+            "$release/argo-rollouts-checksums.txt" --output argo-rollouts-checksums.txt
+          grep -E '[[:space:]]+kubectl-argo-rollouts-linux-amd64$' argo-rollouts-checksums.txt \
+            | sha256sum --check --strict -
+          install -m 0755 kubectl-argo-rollouts-linux-amd64 "$RUNNER_TEMP/kubectl-argo-rollouts"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       - name: Install SOPS
         working-directory: ${{ runner.temp }}
         run: |
@@ -339,8 +361,8 @@ jobs:
           )
           kustomize build . | kubectl apply -f -
           kubectl -n "$NAMESPACE" rollout status statefulset/postgres
-          kubectl -n "$NAMESPACE" rollout status deployment/ping-pong-dep
-          kubectl -n "$NAMESPACE" rollout status deployment/log-output-dep
+          kubectl argo rollouts status ping-pong-dep -n "$NAMESPACE"
+          kubectl argo rollouts status log-output-dep -n "$NAMESPACE"
           kubectl -n "$NAMESPACE" get services -o wide
           kubectl -n "$NAMESPACE" get gateway log-output-ping-pong-gateway
 
