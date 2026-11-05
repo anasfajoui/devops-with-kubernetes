@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  namespace: exercises
+  name: namespace-cpu
+spec:
+  args:
+    - name: namespace
+    - name: cpu-limit
+      value: "0.5"
+  metrics:
+    - name: namespace-cpu
+      initialDelay: 30s
+      interval: 30s
+      count: 10
+      failureLimit: 0
+      successCondition: len(result) == 1 && !isNaN(result[0]) && result[0] <= {{args.cpu-limit}}
+      provider:
+        prometheus:
+          address: http://prom-prometheus-server.monitoring.svc.cluster.local
+          query: |
+            sum(rate(container_cpu_usage_seconds_total{
+              namespace="{{args.namespace}}",
+              container!="",
+              container!="POD",
+              pod!=""
+            }[5m]))

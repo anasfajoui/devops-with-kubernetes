@@ -10,7 +10,7 @@ The Gateway accepts `GET /pingpong` and rewrites its path to `/` before forwardi
 
 ### Deployment
 
-The [Release application workflow](../.github/workflows/main.yml) deploys both ping-pong and log output apps.
+The [Release application workflow](../.github/workflows/main.yml) uses an Argo Rollout and deploys both ping-pong and log output apps along with an AnalysisTemplate that.
 
 ### Gateway address
 

@@ -11,7 +11,7 @@
 
 ### Deployment
 
-The [Release application workflow](../.github/workflows/main.yml) deploys both log output and ping-pong apps.
+The [Release application workflow](../.github/workflows/main.yml) uses an Argo Rollout and deploys both log output and ping-pong apps along with an AnalysisTemplate that watches CPU usage.
 
 ### Gateway address
 

@@ -6,7 +6,7 @@ namespace: exercises
 resources:
   - manifests/namespace.yaml
   - manifests/configmap.yaml
-  - manifests/deployment.yaml
+  - manifests/rollout.yaml
   - manifests/service.yaml
   - manifests/gateway.yaml
   - manifests/route.yaml
