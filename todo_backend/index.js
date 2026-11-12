@@ -53,6 +53,7 @@ const initializeDatabase = () => {
           CREATE TABLE IF NOT EXISTS todos (
             id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
             todo TEXT NOT NULL,
+            done BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )
         `)
@@ -151,6 +152,53 @@ const handleRequest = async (req, res, requestLog) => {
     return;
   }
 
+  const todoMatch = requestPath.match(/^\/todos\/([^/]+)$/)
+  if (todoMatch) {
+    const todoId = todoMatch[1]
+    if (!/^[1-9]\d{0,18}$/.test(todoId) || BigInt(todoId) > 9223372036854775807n) {
+      requestLog.reason = 'Todo ID must be a positive BIGINT'
+      sendJson(res, 400, { error: requestLog.reason })
+      return
+    }
+
+    if (req.method !== 'PUT') {
+      res.setHeader('Allow', 'PUT')
+      sendJson(res, 405, { error: 'Method Not Allowed' })
+      return
+    }
+
+    let requestBody
+    try {
+      requestBody = await readJsonBody(req)
+    } catch (error) {
+      requestLog.reason = error.message
+      sendJson(res, 400, { error: error.message })
+      return
+    }
+
+    if (typeof requestBody?.done !== 'boolean') {
+      requestLog.reason = 'Done must be a boolean'
+      sendJson(res, 400, { error: requestLog.reason })
+      return
+    }
+
+    requestLog.todoId = todoId
+    requestLog.done = requestBody.done
+    await initializeDatabase()
+    const result = await pool.query(
+      'UPDATE todos SET done = $1 WHERE id = $2 RETURNING id, todo, done',
+      [requestBody.done, todoId]
+    )
+    if (result.rowCount === 0) {
+      requestLog.reason = 'Todo not found'
+      sendJson(res, 404, { error: requestLog.reason })
+      return
+    }
+
+    sendJson(res, 200, result.rows[0])
+    return
+  }
+
   if (requestPath !== '/todos') {
     sendJson(res, 404, { error: 'Not Found' })
     return
@@ -158,8 +206,8 @@ const handleRequest = async (req, res, requestLog) => {
 
   if (req.method === 'GET') {
     await initializeDatabase()
-    const result = await pool.query('SELECT todo FROM todos ORDER BY id')
-    sendJson(res, 200, result.rows.map(row => row.todo))
+    const result = await pool.query('SELECT id, todo, done FROM todos ORDER BY id')
+    sendJson(res, 200, result.rows)
     return
   }
 
@@ -195,7 +243,7 @@ const handleRequest = async (req, res, requestLog) => {
 
     await initializeDatabase()
     const result = await pool.query(
-      'INSERT INTO todos (todo) VALUES ($1) RETURNING todo',
+      'INSERT INTO todos (todo) VALUES ($1) RETURNING id, todo, done',
       [todo]
     )
     sendJson(res, 201, result.rows[0])

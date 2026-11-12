@@ -50,3 +50,4 @@
 - [4.2. The project, step 21](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.2/the_project)
 - [4.3. Prometheus](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.3/monitoring)
 - [4.4. Your canary](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.4/ping_pong)
+- [4.5. The project, step 22](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.5/the_project)

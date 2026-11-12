@@ -108,7 +108,12 @@ const getTodos = async () => {
   }
 
   const todos = await response.json()
-  if (!Array.isArray(todos) || !todos.every(todo => typeof todo === 'string')) {
+  if (!Array.isArray(todos) || !todos.every(todo =>
+    todo &&
+    typeof todo.id === 'string' && /^[1-9]\d*$/.test(todo.id) &&
+    typeof todo.todo === 'string' &&
+    typeof todo.done === 'boolean'
+  )) {
     throw new Error('Todo backend returned an invalid response')
   }
 
@@ -261,7 +266,14 @@ app.use(async ctx => {
     return
   }
 
-  const todoItems = todos.map(todo => `<li>${renderTodo(todo)}</li>`).join('')
+  const todoItems = todos.map(({ id, todo, done }) => `
+    <li${done ? ' class="done"' : ''}>
+      <span class="todo-text">${renderTodo(todo)}</span>
+      ${done
+        ? '<span class="done-label">Done</span>'
+        : `<button type="button" class="mark-done" data-todo-id="${escapeHtml(id)}">Mark done</button>`}
+    </li>
+  `).join('')
 
   ctx.type = 'html'
   ctx.body = `
@@ -330,24 +342,53 @@ app.use(async ctx => {
             padding: 0;
           }
           .todos li {
+            align-items: center;
+            background: #f9f9f9;
             border-left: 0.35rem solid #4caf50;
             border-radius: 0.3rem;
             box-shadow: 0 0.15rem 0.6rem rgb(0 0 0 / 10%);
+            display: flex;
+            gap: 1rem;
             margin-bottom: 0.75rem;
             padding: 1rem 1.25rem;
           }
-          .todos a {
+          .todo-text {
+            flex: 1;
+            min-width: 0;
             overflow-wrap: anywhere;
           }
-          .shutdown-actions {
+          .todos li.done {
+            background: #f0f0f0;
+            border-left-color: #999;
+          }
+          .done .todo-text, .done a {
+            color: #666;
+            text-decoration: line-through;
+          }
+          .done-label {
+            color: #2e7d32;
+            font-weight: bold;
+          }
+          .mark-done {
+            background: #1976d2;
+            border: 0;
+            border-radius: 0.35rem;
+            color: white;
+            cursor: pointer;
+            flex-shrink: 0;
+            font: inherit;
+            padding: 0.7rem 1rem;
+          }
+          .mark-done:disabled { cursor: wait; opacity: 0.65; }
+          .break-actions {
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
             justify-content: center;
             margin-top: 1.5rem;
           }
-          .shutdown-actions form { margin: 0; }
-          .shutdown-actions button {
+          .break-actions form { margin: 0; }
+          .break-actions button {
             background: #d32f2f;
             border: 0;
             border-radius: 0.35rem;
@@ -380,15 +421,9 @@ app.use(async ctx => {
           <p class="form-error" id="form-error" role="alert"></p>
           <h2>Todos</h2>
           <ul class="todos">${todoItems}</ul>
-          <div class="shutdown-actions">
+          <div class="break-actions">
             <form method="post" action="/break">
               <button type="submit">Break the app</button>
-            </form>
-            <form method="post" action="/shutdown">
-              <button type="submit">Shut down Todo App</button>
-            </form>
-            <form method="post" action="/todos/shutdown">
-              <button type="submit">Shut down Todo Backend</button>
             </form>
           </div>
         </main>
@@ -396,6 +431,33 @@ app.use(async ctx => {
           const form = document.querySelector('#todo-form')
           const input = form.elements.todo
           const errorMessage = document.querySelector('#form-error')
+
+          document.querySelectorAll('.mark-done').forEach(button => {
+            button.addEventListener('click', async () => {
+              button.disabled = true
+              button.textContent = 'Updating…'
+              errorMessage.textContent = ''
+
+              try {
+                const response = await fetch('/todos/' + encodeURIComponent(button.dataset.todoId), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ done: true }),
+                })
+
+                if (!response.ok) {
+                  const result = await response.json().catch(() => ({}))
+                  throw new Error(result.error || 'Could not mark todo as done')
+                }
+
+                window.location.reload()
+              } catch (error) {
+                errorMessage.textContent = error.message
+                button.disabled = false
+                button.textContent = 'Mark done'
+              }
+            })
+          })
 
           form.addEventListener('submit', async event => {
             event.preventDefault()

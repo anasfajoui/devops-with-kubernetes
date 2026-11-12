@@ -1,4 +1,5 @@
 @baseUrl = http://<GATEWAY_ADDRESS>/todos
+@todoId = 1
 
 ### Fetch all todos
 GET {{baseUrl}}
@@ -11,6 +12,33 @@ Accept: application/json
 
 {
   "todo": "My todo"
+}
+
+### Mark a todo as done (use an ID returned by GET /todos)
+PUT {{baseUrl}}/{{todoId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "done": true
+}
+
+### Mark a todo as not done
+PUT {{baseUrl}}/{{todoId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "done": false
+}
+
+### Reject an invalid done value
+PUT {{baseUrl}}/{{todoId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "done": "true"
 }
 
 ### Create a longer than 140 characters todo (this will fail be rejected by the backend)

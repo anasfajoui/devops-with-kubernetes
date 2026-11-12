@@ -2,9 +2,9 @@
 
 - The form sends new todos (limited to 140 characters) to the Todo Backend service.
 - The list of todos is fetched from the Todo Backend service.
+- "Mark done" button sends `PUT /todos/<id>` with `{ "done": true }`. 
 - The random image is persistently cached.
-- The shutdown buttons exit either the Todo App or Todo Backend process so K8s restarts the selected container. The cached image and PostgreSQL-backed todos persist across application restarts.
-- The **Break the app** button stops normal operation until the liveness probe restarts the frontend container.
+- The "Break the app" button stops normal operation until the liveness probe restarts the frontend container.
 
 ### Deployment
 
@@ -27,8 +27,9 @@ The app should be available at http://<GATEWAY_ADDRESS>/ once the IP address is 
 - `POST /break` — marks the app unhealthy and displays the failure page without exiting the process.
 - `POST /shutdown` — shuts down the Node process so Kubernetes can restart the container.
 
-- `GET /todos` returns the list of todos as JSON.
-- `POST /todos` accepts `{ "todo": "Learn Kubernetes" }` and creates a todo.
+- `GET /todos` returns todo objects with `id`, `todo`, and `done` fields.
+- `POST /todos` accepts `{ "todo": "Learn Kubernetes" }` and creates a todo with `done: false`.
+- `PUT /todos/<id>` accepts `{ "done": true }` or `{ "done": false }` and returns the updated todo.
 - `POST /todos/shutdown` shuts down the process so Kubernetes can restart the container.
 
 ### Todo creation logs in GKE
