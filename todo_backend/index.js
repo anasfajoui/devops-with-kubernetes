@@ -1,5 +1,6 @@
 const http = require('http')
 const { Pool } = require('pg')
+const { createTodoPublisher } = require('./events')
 
 const requireEnv = name => {
   const value = process.env[name]
@@ -20,6 +21,10 @@ const requirePositiveIntegerEnv = name => {
 const PORT = requirePositiveIntegerEnv('PORT')
 const MAX_TODO_LENGTH = requirePositiveIntegerEnv('MAX_TODO_LENGTH')
 const MAX_REQUEST_BODY_LENGTH = requirePositiveIntegerEnv('MAX_REQUEST_BODY_LENGTH')
+const todoPublisher = createTodoPublisher({
+  servers: requireEnv('NATS_URL'),
+  subject: requireEnv('NATS_SUBJECT'),
+})
 const pool = new Pool({
   host: requireEnv('PGHOST'),
   port: requirePositiveIntegerEnv('PGPORT'),
@@ -141,8 +146,7 @@ const handleRequest = async (req, res, requestLog) => {
       message: 'Todo Backend is shutting down. Kubernetes will restart it.',
     })
     setImmediate(() => {
-      console.log('Test shutdown requested, shutting down')
-      server.close(() => process.exit(0))
+      shutDown('Test shutdown')
     })
     return
   }
@@ -195,6 +199,7 @@ const handleRequest = async (req, res, requestLog) => {
       return
     }
 
+    todoPublisher.publish('todo.updated', result.rows[0])
     sendJson(res, 200, result.rows[0])
     return
   }
@@ -246,6 +251,7 @@ const handleRequest = async (req, res, requestLog) => {
       'INSERT INTO todos (todo) VALUES ($1) RETURNING id, todo, done',
       [todo]
     )
+    todoPublisher.publish('todo.created', result.rows[0])
     sendJson(res, 201, result.rows[0])
     return
   }
@@ -295,3 +301,22 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`Todo backend listening on port ${PORT}`)
 })
+
+let stopping = false
+const shutDown = signal => {
+  if (stopping) return
+  stopping = true
+  console.log(`${signal} received, shutting down`)
+  server.close(async () => {
+    try {
+      await todoPublisher.close()
+      await pool.end()
+    } catch (error) {
+      console.error('Shutdown failed:', error)
+      process.exitCode = 1
+    }
+  })
+}
+
+process.on('SIGTERM', () => shutDown('SIGTERM'))
+process.on('SIGINT', () => shutDown('SIGINT'))

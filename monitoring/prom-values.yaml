@@ -6,3 +6,10 @@ prometheus-pushgateway:
 
 server:
   remoteWrite: []
+
+extraScrapeConfigs: |
+  - job_name: nats
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - my-nats-0.my-nats-headless.nats.svc.cluster.local:7777

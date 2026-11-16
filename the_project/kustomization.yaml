@@ -13,5 +13,6 @@ resources:
   - manifests/route.yaml
   - manifests/healthcheckpolicy.yaml
   - ../todo_backend/
+  - ../broadcaster/
 images:
   - name: PROJECT/IMAGE

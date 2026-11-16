@@ -1,0 +1,14 @@
+{
+  "name": "todo-broadcaster",
+  "version": "4.0.6",
+  "description": "Forwards todo events from a NATS queue group to Discord.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@nats-io/transport-node": "3.4.0"
+  },
+  "author": "Anas Fajoui",
+  "license": "ISC"
+}

@@ -5,10 +5,13 @@ datasources:
     apiVersion: 1
     datasources:
       - name: Prometheus
+        uid: prometheus-main
         type: prometheus
         access: proxy
         url: http://prom-prometheus-server
         isDefault: true
+        jsonData:
+          timeInterval: 1m
       - name: Loki
         type: loki
         access: proxy
@@ -17,3 +20,99 @@ datasources:
           httpHeaderName1: X-Scope-OrgID
         secureJsonData:
           httpHeaderValue1: "1"
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: NATS
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    nats-overview:
+      json: |
+        {
+          "uid": "nats-overview",
+          "title": "NATS Overview",
+          "tags": ["nats"],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "refresh": "30s",
+          "time": {"from": "now-30m", "to": "now"},
+          "panels": [
+            {
+              "id": 1,
+              "title": "Metrics target up",
+              "type": "stat",
+              "datasource": {"type": "prometheus", "uid": "prometheus-main"},
+              "gridPos": {"h": 5, "w": 12, "x": 0, "y": 0},
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+              },
+              "targets": [
+                {"refId": "A", "expr": "max(up{job=\"nats\"})"}
+              ]
+            },
+            {
+              "id": 2,
+              "title": "Connections",
+              "type": "stat",
+              "datasource": {"type": "prometheus", "uid": "prometheus-main"},
+              "gridPos": {"h": 5, "w": 12, "x": 12, "y": 0},
+              "fieldConfig": {"defaults": {"min": 0}, "overrides": []},
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+              },
+              "targets": [
+                {"refId": "A", "expr": "sum(nats_varz_connections{job=\"nats\"})"}
+              ]
+            },
+            {
+              "id": 3,
+              "title": "Message throughput",
+              "type": "timeseries",
+              "datasource": {"type": "prometheus", "uid": "prometheus-main"},
+              "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+              "fieldConfig": {"defaults": {"unit": "ops", "min": 0}, "overrides": []},
+              "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+              "targets": [
+                {"refId": "A", "expr": "sum(rate(nats_varz_in_msgs{job=\"nats\"}[$__rate_interval]))", "legendFormat": "in msgs/s"},
+                {"refId": "B", "expr": "sum(rate(nats_varz_out_msgs{job=\"nats\"}[$__rate_interval]))", "legendFormat": "out msgs/s"}
+              ]
+            },
+            {
+              "id": 4,
+              "title": "Byte throughput",
+              "type": "timeseries",
+              "datasource": {"type": "prometheus", "uid": "prometheus-main"},
+              "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+              "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}, "overrides": []},
+              "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+              "targets": [
+                {"refId": "A", "expr": "sum(rate(nats_varz_in_bytes{job=\"nats\"}[$__rate_interval]))", "legendFormat": "in B/s"},
+                {"refId": "B", "expr": "sum(rate(nats_varz_out_bytes{job=\"nats\"}[$__rate_interval]))", "legendFormat": "out B/s"}
+              ]
+            }
+          ]
+        }

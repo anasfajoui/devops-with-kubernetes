@@ -1,0 +1,38 @@
+config:
+  cluster:
+    enabled: false
+  jetstream:
+    enabled: false
+
+container:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+reloader:
+  merge:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+promExporter:
+  enabled: true
+  merge:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+natsBox:
+  enabled: false

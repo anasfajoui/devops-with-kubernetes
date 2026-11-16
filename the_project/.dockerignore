@@ -1,3 +1,4 @@
 # Ignore the Dockerfile and the K8s manifest files
 Dockerfile*
+README.md
 manifests

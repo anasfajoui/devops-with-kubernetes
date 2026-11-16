@@ -5,10 +5,15 @@
 - "Mark done" button sends `PUT /todos/<id>` with `{ "done": true }`. 
 - The random image is persistently cached.
 - The "Break the app" button stops normal operation until the liveness probe restarts the frontend container.
+- Creating or updating a todo publishes an event to NATS. One of the six [broadcaster](../broadcaster/) replicas forwards it to Discord.
 
 ### Deployment
 
-The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project and the todo backend.
+The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project, the todo backend and the broadcaster, and installs the official NATS Helm chart in the `nats` namespace. The applications share the broker and use a separate `todos.<namespace>.events` subject for each environment.
+
+Notifications go to [Kube Lab](https://discord.gg/RQgXHufrcQ) Discord server, under the *# todo-updates* Text Channel.
+
+NATS metrics are available in Grafana after deployment; see [monitoring](../monitoring/README.md).
 
 Wait for the workflow to finish, then find the Gateway address:
 

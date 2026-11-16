@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: project
+  name: broadcaster-config
+data:
+  PORT: "8080"
+  NATS_URL: "nats://my-nats.nats.svc.cluster.local:4222"
+  NATS_SUBJECT: "todos.project.events"
+  NATS_QUEUE_GROUP: "todo-broadcasters"
+  WEBHOOK_TIMEOUT_MS: "5000"

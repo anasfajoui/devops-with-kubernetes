@@ -6,6 +6,8 @@ on:
       - ".github/workflows/main.yml"
       - "the_project/**"
       - "todo_backend/**"
+      - "broadcaster/**"
+      - "nats/**"
       - "log_output/**"
       - "ping_pong/**"
       - "monitoring/**"
@@ -32,6 +34,7 @@ env:
   NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
+  BROADCASTER_IMAGE: broadcaster
   LOG_OUTPUT_WRITER_IMAGE: log-output-writer
   LOG_OUTPUT_READER_IMAGE: log-output-reader
   PING_PONG_IMAGE: ping-pong
@@ -134,6 +137,9 @@ jobs:
           printf 'TODO_BACKEND_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
             "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$TODO_BACKEND_IMAGE" \
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          printf 'BROADCASTER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
+            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$BROADCASTER_IMAGE" \
+            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
           printf 'LOG_OUTPUT_WRITER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
             "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$LOG_OUTPUT_WRITER_IMAGE" \
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
@@ -177,6 +183,15 @@ jobs:
           push: true
           provenance: false
           tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
+
+      - name: Build and push Broadcaster image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./broadcaster
+          file: ./broadcaster/Dockerfile
+          push: true
+          provenance: false
+          tags: ${{ env.BROADCASTER_IMAGE_TAG }}
 
       - name: Build and push Log Output writer image
         uses: docker/build-push-action@v7
@@ -247,6 +262,16 @@ jobs:
             echo "Waiting for GKE Gateway API resources and GatewayClass"
             sleep 20
           done
+
+      - name: Deploy NATS
+        working-directory: ./nats
+        run: |
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm repo update
+          helm upgrade --install my-nats nats/nats \
+            --namespace nats --create-namespace \
+            --values values.yaml \
+            --wait
 
       - name: Deploy monitoring
         working-directory: ./monitoring
@@ -323,6 +348,8 @@ jobs:
             > ../todo_backend/manifests/secret.yaml
           sops --decrypt ../ping_pong/manifests/secret.enc.yaml \
             > ../ping_pong/manifests/secret.yaml
+          sops --decrypt ../broadcaster/manifests/secret.enc.yaml \
+            > ../broadcaster/manifests/secret.yaml
 
       - name: Deploy Todo App
         run: |
@@ -338,8 +365,13 @@ jobs:
               --behavior=merge \
               --from-literal="GCS_BUCKET=${PROJECT_ID}-todo-backups"
           )
+          (
+            cd ../broadcaster
+            kustomize edit set image "BROADCASTER/IMAGE=$BROADCASTER_IMAGE_TAG"
+          )
           kustomize build . | kubectl apply -f -
           kubectl config set-context --current --namespace="$NAMESPACE"
+          kubectl rollout status deployment/broadcaster-dep
           kubectl rollout status statefulset/todo-postgres
           kubectl rollout status deployment/todo-backend-dep
           kubectl rollout status "deployment/project-dep"
@@ -366,10 +398,13 @@ jobs:
           kubectl -n "$NAMESPACE" get services -o wide
           kubectl -n "$NAMESPACE" get gateway log-output-ping-pong-gateway
 
-      - name: Remove decrypted Secrets
+      - name: Remove Secrets
         if: always()
         run: |
-          rm -f ../todo_backend/manifests/secret.yaml ../ping_pong/manifests/secret.yaml
+          rm -f \
+            ../todo_backend/manifests/secret.yaml \
+            ../ping_pong/manifests/secret.yaml \
+            ../broadcaster/manifests/secret.yaml
 
       - name: Deployment summary
         timeout-minutes: 16
@@ -418,6 +453,7 @@ jobs:
             printf '\n### Grafana\n\nNamespace: `monitoring`\n\n'
             printf 'Run:\n\n```sh\nkubectl port-forward --namespace monitoring svc/grafana 3000:80\n```\n\n'
             printf 'Then open [http://localhost:3000](http://localhost:3000).\n'
+            printf 'NATS dashboard: [NATS Overview](http://localhost:3000/d/nats-overview).\n'
             printf '\n### Prometheus\n\nNamespace: `monitoring`\n\n'
             printf 'Run:\n\n```sh\nkubectl port-forward svc/prom-prometheus-server -n monitoring 9090:80\n```\n\n'
             printf 'Then open [http://localhost:9090](http://localhost:9090).\n'

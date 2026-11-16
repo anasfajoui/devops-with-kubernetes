@@ -5,6 +5,10 @@
 - A cronjob adds a random Wikipedia todo every hour.
 - Another CronJob backs up the todo database to Cloud Storage every day at 00:00 UTC.
 
+### Todo events
+
+Successful `POST /todos` and `PUT /todos/<id>` requests publish a JSON event after PostgreSQL commits the change.
+
 ### Deployment
 
 The project's Kustomize configuration includes this backend, the Gateway and HTTPRoutes, PostgreSQL, the namespace, the hourly todo CronJob and the daily backup CronJob. See [the project deployment instructions](../the_project/README.md#deployment) to deploy both apps together.

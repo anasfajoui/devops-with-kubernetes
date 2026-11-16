@@ -1,12 +1,13 @@
 {
   "name": "todo-backend",
-  "version": "3.0.5",
+  "version": "4.0.6",
   "description": "A PostgreSQL-backed API for creating and listing todos.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "@nats-io/transport-node": "3.4.0",
     "pg": "^8.13.1"
   },
   "author": "Anas Fajoui",

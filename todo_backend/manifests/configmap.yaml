@@ -11,6 +11,8 @@ data:
   PGPORT: "5432"
   PGDATABASE: todos
   PGUSER: todo_backend
+  NATS_URL: "nats://my-nats.nats.svc.cluster.local:4222"
+  NATS_SUBJECT: "todos.project.events"
   RANDOM_ARTICLE_URL: "https://en.wikipedia.org/wiki/Special:Random"
   TODO_BACKEND_URL: "http://todo-backend-svc:80/todos"
   HTTP_REQUEST_TIMEOUT_MS: "10000"
