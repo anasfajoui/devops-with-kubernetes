@@ -2,6 +2,8 @@ name: Release application
 
 on:
   push:
+    branches-ignore:
+      - argocd
     paths:
       - ".github/workflows/main.yml"
       - "the_project/**"
@@ -30,6 +32,7 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   REPOSITORY: dwk-repository
   SOPS_VERSION: "3.13.3"
+  ARGO_CD_VERSION: "v3.6.2"
   ARGO_ROLLOUTS_VERSION: "v1.10.1"
   NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
@@ -42,6 +45,7 @@ env:
 jobs:
   ensure-cluster:
     name: Ensure GKE cluster is ready
+    if: github.ref_type == 'branch' && github.ref_name != 'argocd'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: GKE_PROJECT
@@ -114,10 +118,14 @@ jobs:
   build-publish-deploy:
     name: Build, publish and deploy applications
     needs: ensure-cluster
+    permissions:
+      contents: write
+      id-token: write
     runs-on: ubuntu-latest
     environment: GKE_PROJECT
     env:
       PROJECT_ID: ${{ secrets.GKE_PROJECT }}
+      EXERCISES_NAMESPACE: ${{ github.ref_name == 'main' && 'exercises' || github.ref_name }}
     defaults:
       run:
         shell: bash
@@ -263,6 +271,16 @@ jobs:
             sleep 20
           done
 
+      - name: Install Argo CD
+        run: |
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n argocd apply --server-side --force-conflicts \
+            -f "https://raw.githubusercontent.com/argoproj/argo-cd/$ARGO_CD_VERSION/manifests/install.yaml"
+          kubectl -n argocd patch service argocd-server --type=merge -p '{"spec":{"type":"LoadBalancer"}}'
+          kubectl -n argocd rollout status deployment/argocd-server --timeout=10m
+          kubectl -n argocd rollout status deployment/argocd-repo-server --timeout=10m
+          kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=10m
+
       - name: Deploy NATS
         working-directory: ./nats
         run: |
@@ -314,15 +332,6 @@ jobs:
             crd/analysisruns.argoproj.io
           kubectl -n argo-rollouts rollout status deployment/argo-rollouts --timeout=5m
 
-          curl --fail --silent --show-error --location \
-            "$release/kubectl-argo-rollouts-linux-amd64" --output kubectl-argo-rollouts-linux-amd64
-          curl --fail --silent --show-error --location \
-            "$release/argo-rollouts-checksums.txt" --output argo-rollouts-checksums.txt
-          grep -E '[[:space:]]+kubectl-argo-rollouts-linux-amd64$' argo-rollouts-checksums.txt \
-            | sha256sum --check --strict -
-          install -m 0755 kubectl-argo-rollouts-linux-amd64 "$RUNNER_TEMP/kubectl-argo-rollouts"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-
       - name: Install SOPS
         working-directory: ${{ runner.temp }}
         run: |
@@ -346,10 +355,13 @@ jobs:
           umask 077
           sops --decrypt ../todo_backend/manifests/secret.enc.yaml \
             > ../todo_backend/manifests/secret.yaml
-          sops --decrypt ../ping_pong/manifests/secret.enc.yaml \
-            > ../ping_pong/manifests/secret.yaml
           sops --decrypt ../broadcaster/manifests/secret.enc.yaml \
             > ../broadcaster/manifests/secret.yaml
+
+          kubectl create namespace "$EXERCISES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          sops --decrypt --output-type json ../ping_pong/manifests/secret.enc.yaml \
+            | jq --arg namespace "$EXERCISES_NAMESPACE" '.metadata.namespace = $namespace' \
+            | kubectl apply --server-side -f -
 
       - name: Deploy Todo App
         run: |
@@ -378,77 +390,90 @@ jobs:
           kubectl get services -o wide
           kubectl -n "$NAMESPACE" get gateway project-todo-gateway
 
-      - name: Deploy Ping Pong App
-        working-directory: ./log_output
+      - name: Commit Log output images for Argo CD
+        working-directory: ${{ github.workspace }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-            NAMESPACE="exercises"
+          git fetch --depth=1 origin "refs/heads/$GITHUB_REF_NAME"
+          if ! git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- log_output ping_pong .github/workflows/main.yml; then
+            echo "The branch has newer Log output deployment inputs. Skipping this revision."
+            exit 0
           fi
-          kustomize edit set namespace "$NAMESPACE"
-          kustomize edit set image "LOG/WRITER=$LOG_OUTPUT_WRITER_IMAGE_TAG"
-          kustomize edit set image "LOG/READER=$LOG_OUTPUT_READER_IMAGE_TAG"
+          git worktree add --detach "$RUNNER_TEMP/log-output-gitops" FETCH_HEAD
+          cd "$RUNNER_TEMP/log-output-gitops/log_output"
+          kustomize edit set namespace "$EXERCISES_NAMESPACE"
+          kustomize edit set image "LOG/WRITER=$LOG_OUTPUT_WRITER_IMAGE_TAG" "LOG/READER=$LOG_OUTPUT_READER_IMAGE_TAG"
           (
             cd ../ping_pong
             kustomize edit set image "PING/PONG=$PING_PONG_IMAGE_TAG"
           )
-          kustomize build . | kubectl apply -f -
-          kubectl -n "$NAMESPACE" rollout status statefulset/postgres
-          kubectl argo rollouts status ping-pong-dep -n "$NAMESPACE"
-          kubectl argo rollouts status log-output-dep -n "$NAMESPACE"
-          kubectl -n "$NAMESPACE" get services -o wide
-          kubectl -n "$NAMESPACE" get gateway log-output-ping-pong-gateway
+          kustomize build . > /dev/null
+          git add -- kustomization.yaml ../ping_pong/kustomization.yaml
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "Update Log output images for ${GITHUB_SHA:0:12}"
+          # Only publish if the remote branch still points to the parent we built on.
+          branch_ref="refs/heads/$GITHUB_REF_NAME"
+          git -C "$GITHUB_WORKSPACE" push --force-with-lease="$branch_ref:$(git rev-parse HEAD^)" \
+            origin "$(git rev-parse HEAD):$branch_ref"
 
       - name: Remove Secrets
         if: always()
         run: |
           rm -f \
             ../todo_backend/manifests/secret.yaml \
-            ../ping_pong/manifests/secret.yaml \
             ../broadcaster/manifests/secret.yaml
 
       - name: Deployment summary
         timeout-minutes: 16
         run: |
           todo_namespace="$NAMESPACE"
-          exercises_namespace="$NAMESPACE"
           if [[ "$GITHUB_REF_NAME" == "main" ]]; then
             todo_namespace="project"
-            exercises_namespace="exercises"
           fi
 
           todo_gateway_ip=""
-          exercises_gateway_ip=""
+          argocd_ip=""
           deadline=$((SECONDS + 900))
           while (( SECONDS < deadline )); do
             todo_gateway_ip="$(kubectl -n "$todo_namespace" get gateways.gateway.networking.k8s.io \
               project-todo-gateway --request-timeout=15s \
               -o 'jsonpath={.status.addresses[0].value}')"
-            exercises_gateway_ip="$(kubectl -n "$exercises_namespace" get gateways.gateway.networking.k8s.io \
-              log-output-ping-pong-gateway --request-timeout=15s \
-              -o 'jsonpath={.status.addresses[0].value}')"
-            if [[ -n "$todo_gateway_ip" && -n "$exercises_gateway_ip" ]]; then
+            argocd_ip="$(kubectl -n argocd get svc argocd-server --request-timeout=15s \
+              -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')"
+            if [[ -n "$todo_gateway_ip" && -n "$argocd_ip" ]]; then
               break
             fi
-            echo "Waiting for Gateway IPs: todo=${todo_gateway_ip:-pending}, exercises=${exercises_gateway_ip:-pending}"
+            echo "Waiting for addresses: Todo=${todo_gateway_ip:-pending}, Argo CD=${argocd_ip:-pending}"
             sleep 20
           done
 
+          exercises_gateway_ip="$(kubectl -n "$EXERCISES_NAMESPACE" get gateways.gateway.networking.k8s.io \
+            log-output-ping-pong-gateway --ignore-not-found --request-timeout=15s \
+            -o 'jsonpath={.status.addresses[0].value}')"
           {
             printf '## Deployment endpoints\n\n'
             printf 'Cluster: `%s` | Branch: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_NAME"
+            printf '### Argo CD\n\n'
+            if [[ -n "$argocd_ip" ]]; then
+              printf 'UI: [https://%s](https://%s)\n\n' "$argocd_ip" "$argocd_ip"
+            else
+              printf 'External IP pending. Run `kubectl -n argocd get svc argocd-server --watch`.\n\n'
+            fi
+            printf '%s\n' 'Sign in as `admin`. Retrieve the initial password in your local terminal.' '' \
+              '```sh' "kubectl -n argocd get secret argocd-initial-admin-secret -o go-template='{{.data.password | base64decode}}'" '```' ''
             printf '### Todo App\n\nNamespace: `%s`\n\n' "$todo_namespace"
             if [[ -n "$todo_gateway_ip" ]]; then
               printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
               printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
             else
-              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io project-todo-gateway\n```\n' "$todo_namespace"
+              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateway project-todo-gateway\n```\n' "$todo_namespace"
             fi
-            printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$exercises_namespace"
+            printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$EXERCISES_NAMESPACE"
             if [[ -n "$exercises_gateway_ip" ]]; then
               printf -- '- Gateway IP: `%s`\n' "$exercises_gateway_ip"
               printf -- '- Ping Pong app: [http://%s/](http://%s/)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
             else
-              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateways.gateway.networking.k8s.io log-output-ping-pong-gateway\n```\n' "$exercises_namespace"
+              printf 'After Argo CD syncs the Application, check the Gateway with:\n\n```sh\nkubectl -n %s get gateway log-output-ping-pong-gateway\n```\n' "$EXERCISES_NAMESPACE" 
             fi
             printf '\n### Grafana\n\nNamespace: `monitoring`\n\n'
             printf 'Run:\n\n```sh\nkubectl port-forward --namespace monitoring svc/grafana 3000:80\n```\n\n'

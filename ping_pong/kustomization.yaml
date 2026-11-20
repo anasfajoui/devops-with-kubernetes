@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - manifests/configmap.yaml
-  - manifests/secret.yaml
   - manifests/postgres-service.yaml
   - manifests/postgres-statefulset.yaml
   - manifests/analysis-template.yaml

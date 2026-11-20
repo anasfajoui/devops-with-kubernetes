@@ -52,3 +52,4 @@
 - [4.4. Your canary](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.4/ping_pong)
 - [4.5. The project, step 22](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.5/the_project)
 - [4.6. The project, step 23](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.6/broadcaster)
+- [4.7. Baby steps to GitOps](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.7/log_output)
