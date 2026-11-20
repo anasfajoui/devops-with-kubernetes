@@ -2,13 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - manifests/configmap.yaml
-  - manifests/postgres-service.yaml
-  - manifests/postgres-statefulset.yaml
-  - manifests/analysis-template.yaml
-  - manifests/rollout.yaml
-  - manifests/service.yaml
-  - manifests/healthcheckpolicy.yaml
-  - manifests/route.yaml
+- manifests/configmap.yaml
+- manifests/postgres-service.yaml
+- manifests/postgres-statefulset.yaml
+- manifests/analysis-template.yaml
+- manifests/rollout.yaml
+- manifests/service.yaml
+- manifests/healthcheckpolicy.yaml
+- manifests/route.yaml
 images:
-  - name: PING/PONG
+- name: PING/PONG
+  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/ping-pong
+  newTag: main-4d661a4309525d7e89f7504c02af15672368606a

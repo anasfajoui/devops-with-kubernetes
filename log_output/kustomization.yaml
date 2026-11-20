@@ -4,12 +4,16 @@ kind: Kustomization
 namespace: exercises
 
 resources:
-  - manifests/configmap.yaml
-  - manifests/rollout.yaml
-  - manifests/service.yaml
-  - manifests/gateway.yaml
-  - manifests/route.yaml
-  - ../ping_pong/
+- manifests/configmap.yaml
+- manifests/rollout.yaml
+- manifests/service.yaml
+- manifests/gateway.yaml
+- manifests/route.yaml
+- ../ping_pong/
 images:
-  - name: LOG/WRITER
-  - name: LOG/READER
+- name: LOG/READER
+  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/log-output-reader
+  newTag: main-4d661a4309525d7e89f7504c02af15672368606a
+- name: LOG/WRITER
+  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/log-output-writer
+  newTag: main-4d661a4309525d7e89f7504c02af15672368606a
