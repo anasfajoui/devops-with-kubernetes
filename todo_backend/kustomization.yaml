@@ -2,16 +2,18 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - manifests/configmap.yaml
-  - manifests/deployment.yaml
-  - manifests/service.yaml
-  - manifests/route.yaml
-  - manifests/healthcheckpolicy.yaml
-  - manifests/postgres-service.yaml
-  - manifests/postgres-statefulset.yaml
-  - manifests/cronjob.yaml
-  - manifests/backup-configmap.yaml
-  - manifests/backup-serviceaccount.yaml
-  - manifests/backup-cronjob.yaml
+- manifests/configmap.yaml
+- manifests/deployment.yaml
+- manifests/service.yaml
+- manifests/route.yaml
+- manifests/healthcheckpolicy.yaml
+- manifests/postgres-service.yaml
+- manifests/postgres-statefulset.yaml
+- manifests/cronjob.yaml
+- manifests/backup-configmap.yaml
+- manifests/backup-serviceaccount.yaml
+- manifests/backup-cronjob.yaml
 images:
-  - name: TODO/IMAGE
+- name: TODO/IMAGE
+  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend
+  newTag: main-3a2e2f4398cd9ea041a63f9f5beff4def1d44dac

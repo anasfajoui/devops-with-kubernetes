@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: todo-backup-config
 data:
-  GCS_BUCKET: BUCKET_NAME
+  GCS_BUCKET: dwk-gke-510521-todo-backups

@@ -4,14 +4,16 @@ kind: Kustomization
 namespace: project
 
 resources:
-  - manifests/configmap.yaml
-  - manifests/persistentvolumeclaim.yaml
-  - manifests/deployment.yaml
-  - manifests/service.yaml
-  - manifests/gateway.yaml
-  - manifests/route.yaml
-  - manifests/healthcheckpolicy.yaml
-  - ../todo_backend/
-  - ../broadcaster/
+- manifests/configmap.yaml
+- manifests/persistentvolumeclaim.yaml
+- manifests/deployment.yaml
+- manifests/service.yaml
+- manifests/gateway.yaml
+- manifests/route.yaml
+- manifests/healthcheckpolicy.yaml
+- ../todo_backend/
+- ../broadcaster/
 images:
-  - name: PROJECT/IMAGE
+- name: PROJECT/IMAGE
+  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project
+  newTag: main-3a2e2f4398cd9ea041a63f9f5beff4def1d44dac
