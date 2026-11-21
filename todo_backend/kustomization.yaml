@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - manifests/configmap.yaml
-  - manifests/secret.yaml
   - manifests/deployment.yaml
   - manifests/service.yaml
   - manifests/route.yaml

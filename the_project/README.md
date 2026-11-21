@@ -9,13 +9,19 @@
 
 ### Deployment
 
-The [Release application workflow](../.github/workflows/main.yml) creates the cluster, builds and publishes The Project, the todo backend and the broadcaster, and installs the official NATS Helm chart in the `nats` namespace. The applications share the broker and use a separate `todos.<namespace>.events` subject for each environment.
+On pushes to `main`, the workflow builds and publishes the frontend, backend and broadcaster images. It commits their new image tags and the database backup bucket name to Git. Argo CD watches `the_project` and syncs the Todo resources into the `project` namespace. [Release application workflow](../.github/workflows/main.yml)
+
+After the first successful workflow, open the Argo CD URL in the workflow summary. Sign in as `admin` using the password retrieval command in that summary. In **New App**, enter these settings and select **Create**.
+
+- Application name `todo`, project `default`, sync policy **Automatic**.
+- Repository URL `https://github.com/anasfajoui/devops-with-kubernetes.git`, revision `HEAD`, path `the_project`.
+- Destination cluster `https://kubernetes.default.svc`, namespace `project`.
 
 Notifications go to [Kube Lab](https://discord.gg/RQgXHufrcQ) Discord server, under the *# todo-updates* Text Channel.
 
 NATS metrics are available in Grafana after deployment; see [monitoring](../monitoring/README.md).
 
-Wait for the workflow to finish, then find the Gateway address:
+After Argo CD syncs the application, find the Gateway address.
 
 ```sh
 kubectl -n project get gateway project-todo-gateway --watch
@@ -47,7 +53,7 @@ The backup CronJob uses `pg_dump` to write a plain SQL dump into a shared tempor
 
 #### GCP one-time setup
 
-1. Deploy through the `Release application` workflow first. Then:
+1. Complete the [Argo CD deployment](#deployment), then set the backup variables and connect to the cluster.
 
 ```sh
 PROJECT_ID="<PROJECT_ID>"
@@ -73,8 +79,6 @@ for BACKUP_ROLE in roles/storage.objectCreator roles/storage.objectViewer; do
     --member="$BACKUP_PRINCIPAL" --role="$BACKUP_ROLE" --condition=None
 done
 ```
-
-Main uses `project`. For another branch environment, set `NAMESPACE` to its namespace and repeat the IAM grants.
 
 #### Test backup
 

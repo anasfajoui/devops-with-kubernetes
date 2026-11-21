@@ -53,3 +53,4 @@
 - [4.5. The project, step 22](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.5/the_project)
 - [4.6. The project, step 23](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.6/broadcaster)
 - [4.7. Baby steps to GitOps](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.7/log_output)
+- [4.8. The project, step 24](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.8/the_project)

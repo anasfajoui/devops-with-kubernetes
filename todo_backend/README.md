@@ -11,7 +11,7 @@ Successful `POST /todos` and `PUT /todos/<id>` requests publish a JSON event aft
 
 ### Deployment
 
-The project's Kustomize configuration includes this backend, the Gateway and HTTPRoutes, PostgreSQL, the namespace, the hourly todo CronJob and the daily backup CronJob. See [the project deployment instructions](../the_project/README.md#deployment) to deploy both apps together.
+The Todo Argo CD Application deploys this backend, PostgreSQL, the Gateway and HTTPRoutes, and the hourly todo and daily backup CronJobs. See [the project deployment instructions](../the_project/README.md#deployment).
 
 Find the Gateway address:
 

@@ -34,7 +34,6 @@ env:
   SOPS_VERSION: "3.13.3"
   ARGO_CD_VERSION: "v3.6.2"
   ARGO_ROLLOUTS_VERSION: "v1.10.1"
-  NAMESPACE: ${{ github.ref_name }}
   PROJECT_IMAGE: the-project
   TODO_BACKEND_IMAGE: todo-backend
   BROADCASTER_IMAGE: broadcaster
@@ -129,7 +128,6 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./the_project
 
     steps:
       - name: Checkout
@@ -175,6 +173,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push The Project image
+        if: github.ref_name == 'main'
         uses: docker/build-push-action@v7
         with:
           context: ./the_project
@@ -184,6 +183,7 @@ jobs:
           tags: ${{ env.PROJECT_IMAGE_TAG }}
 
       - name: Build and push Todo Backend image
+        if: github.ref_name == 'main'
         uses: docker/build-push-action@v7
         with:
           context: ./todo_backend
@@ -193,6 +193,7 @@ jobs:
           tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
 
       - name: Build and push Broadcaster image
+        if: github.ref_name == 'main'
         uses: docker/build-push-action@v7
         with:
           context: ./broadcaster
@@ -344,7 +345,7 @@ jobs:
           install -m 0755 "$binary" "$RUNNER_TEMP/sops"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
-      - name: Decrypt Secrets
+      - name: Prepare application namespaces and Secrets
         env:
           SOPS_AGE_KEY: ${{ secrets.AGE_SECRET_KEY }}
         run: |
@@ -352,98 +353,60 @@ jobs:
             echo "AGE_SECRET_KEY is missing from the GKE_PROJECT environment"
             exit 1
           }
-          umask 077
-          sops --decrypt ../todo_backend/manifests/secret.enc.yaml \
-            > ../todo_backend/manifests/secret.yaml
-          sops --decrypt ../broadcaster/manifests/secret.enc.yaml \
-            > ../broadcaster/manifests/secret.yaml
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            kubectl apply -f the_project/manifests/namespace.yaml
+            for app in todo_backend broadcaster; do
+              sops --decrypt "$app/manifests/secret.enc.yaml" | kubectl apply --server-side -n project -f -
+            done
+          fi
 
           kubectl create namespace "$EXERCISES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          sops --decrypt --output-type json ../ping_pong/manifests/secret.enc.yaml \
+          sops --decrypt --output-type json ping_pong/manifests/secret.enc.yaml \
             | jq --arg namespace "$EXERCISES_NAMESPACE" '.metadata.namespace = $namespace' \
             | kubectl apply --server-side -f -
 
-      - name: Deploy Todo App
+      - name: Commit application manifests for Argo CD
         run: |
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-            NAMESPACE="project"
-          fi
-          kustomize edit set namespace "$NAMESPACE"
-          kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG"
           (
-            cd ../todo_backend
-            kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG"
-            kustomize edit add configmap todo-backup-config \
-              --behavior=merge \
-              --from-literal="GCS_BUCKET=${PROJECT_ID}-todo-backups"
+            cd log_output
+            kustomize edit set namespace "$EXERCISES_NAMESPACE"
+            kustomize edit set image "LOG/WRITER=$LOG_OUTPUT_WRITER_IMAGE_TAG" "LOG/READER=$LOG_OUTPUT_READER_IMAGE_TAG"
           )
           (
-            cd ../broadcaster
-            kustomize edit set image "BROADCASTER/IMAGE=$BROADCASTER_IMAGE_TAG"
-          )
-          kustomize build . | kubectl apply -f -
-          kubectl config set-context --current --namespace="$NAMESPACE"
-          kubectl rollout status deployment/broadcaster-dep
-          kubectl rollout status statefulset/todo-postgres
-          kubectl rollout status deployment/todo-backend-dep
-          kubectl rollout status "deployment/project-dep"
-          kubectl get services -o wide
-          kubectl -n "$NAMESPACE" get gateway project-todo-gateway
-
-      - name: Commit Log output images for Argo CD
-        working-directory: ${{ github.workspace }}
-        run: |
-          git fetch --depth=1 origin "refs/heads/$GITHUB_REF_NAME"
-          if ! git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- log_output ping_pong .github/workflows/main.yml; then
-            echo "The branch has newer Log output deployment inputs. Skipping this revision."
-            exit 0
-          fi
-          git worktree add --detach "$RUNNER_TEMP/log-output-gitops" FETCH_HEAD
-          cd "$RUNNER_TEMP/log-output-gitops/log_output"
-          kustomize edit set namespace "$EXERCISES_NAMESPACE"
-          kustomize edit set image "LOG/WRITER=$LOG_OUTPUT_WRITER_IMAGE_TAG" "LOG/READER=$LOG_OUTPUT_READER_IMAGE_TAG"
-          (
-            cd ../ping_pong
+            cd ping_pong
             kustomize edit set image "PING/PONG=$PING_PONG_IMAGE_TAG"
           )
-          kustomize build . > /dev/null
-          git add -- kustomization.yaml ../ping_pong/kustomization.yaml
-          if git diff --cached --quiet; then exit 0; fi
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "Update Log output images for ${GITHUB_SHA:0:12}"
-          # Only publish if the remote branch still points to the parent we built on.
-          branch_ref="refs/heads/$GITHUB_REF_NAME"
-          git -C "$GITHUB_WORKSPACE" push --force-with-lease="$branch_ref:$(git rev-parse HEAD^)" \
-            origin "$(git rev-parse HEAD):$branch_ref"
+          kustomize build log_output > /dev/null
+          git add -- log_output/kustomization.yaml ping_pong/kustomization.yaml
 
-      - name: Remove Secrets
-        if: always()
-        run: |
-          rm -f \
-            ../todo_backend/manifests/secret.yaml \
-            ../broadcaster/manifests/secret.yaml
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            (cd the_project && kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG")
+            (cd todo_backend && kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG")
+            (cd broadcaster && kustomize edit set image "BROADCASTER/IMAGE=$BROADCASTER_IMAGE_TAG")
+            yq -i '.data.GCS_BUCKET = (strenv(PROJECT_ID) + "-todo-backups")' todo_backend/manifests/backup-configmap.yaml
+            kustomize build the_project > /dev/null
+            git add -- the_project/kustomization.yaml todo_backend/kustomization.yaml \
+              broadcaster/kustomization.yaml todo_backend/manifests/backup-configmap.yaml
+          fi
+
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update application manifests for ${GITHUB_SHA:0:12}"
+          git push origin "HEAD:$GITHUB_REF_NAME"
 
       - name: Deployment summary
         timeout-minutes: 16
         run: |
-          todo_namespace="$NAMESPACE"
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-            todo_namespace="project"
-          fi
-
-          todo_gateway_ip=""
           argocd_ip=""
           deadline=$((SECONDS + 900))
           while (( SECONDS < deadline )); do
-            todo_gateway_ip="$(kubectl -n "$todo_namespace" get gateways.gateway.networking.k8s.io \
-              project-todo-gateway --request-timeout=15s \
-              -o 'jsonpath={.status.addresses[0].value}')"
             argocd_ip="$(kubectl -n argocd get svc argocd-server --request-timeout=15s \
               -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')"
-            if [[ -n "$todo_gateway_ip" && -n "$argocd_ip" ]]; then
+            if [[ -n "$argocd_ip" ]]; then
               break
             fi
-            echo "Waiting for addresses: Todo=${todo_gateway_ip:-pending}, Argo CD=${argocd_ip:-pending}"
+            echo "Waiting for the Argo CD address"
             sleep 20
           done
 
@@ -461,12 +424,16 @@ jobs:
             fi
             printf '%s\n' 'Sign in as `admin`. Retrieve the initial password in your local terminal.' '' \
               '```sh' "kubectl -n argocd get secret argocd-initial-admin-secret -o go-template='{{.data.password | base64decode}}'" '```' ''
-            printf '### Todo App\n\nNamespace: `%s`\n\n' "$todo_namespace"
-            if [[ -n "$todo_gateway_ip" ]]; then
-              printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
-              printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
-            else
-              printf 'Gateway IP is still pending. Check with:\n\n```sh\nkubectl -n %s get gateway project-todo-gateway\n```\n' "$todo_namespace"
+            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+              printf '### Todo App\n\nNamespace: `project`\n\n'
+              todo_gateway_ip="$(kubectl -n project get gateways.gateway.networking.k8s.io \
+                project-todo-gateway --ignore-not-found --request-timeout=15s -o 'jsonpath={.status.addresses[0].value}')"
+              if [[ -n "$todo_gateway_ip" ]]; then
+                printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
+                printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
+              else
+                printf 'After Argo CD syncs the Todo Application, run `kubectl -n project get gateway project-todo-gateway --watch`.\n'
+              fi
             fi
             printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$EXERCISES_NAMESPACE"
             if [[ -n "$exercises_gateway_ip" ]]; then
