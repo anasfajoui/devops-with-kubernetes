@@ -427,55 +427,49 @@ jobs:
         run: kubectl apply -f log_output/manifests/argocd/application.yaml
 
       - name: Deployment summary
-        timeout-minutes: 16
         run: |
-          argocd_ip=""
-          deadline=$((SECONDS + 900))
-          while (( SECONDS < deadline )); do
-            argocd_ip="$(kubectl -n argocd get svc argocd-server --request-timeout=15s \
-              -o 'jsonpath={.status.loadBalancer.ingress[0].ip}')"
-            if [[ -n "$argocd_ip" ]]; then
-              break
-            fi
-            echo "Waiting for the Argo CD address"
-            sleep 20
-          done
+          wait_for_ip() {
+            local namespace="$1" resource="$2" filter="$3" ip
+            while true; do
+              ip="$(kubectl -n "$namespace" get "$resource" --ignore-not-found -o json | jq -r "$filter")" || return 1
+              if [[ -n "$ip" ]]; then
+                printf '%s\n' "$ip"
+                return 0
+              fi
+              echo "Waiting for $resource in $namespace to receive an IP" >&2
+              sleep 15
+            done
+          }
+
+          argocd_ip="$(wait_for_ip argocd service/argocd-server 'first(.status.loadBalancer.ingress[]? | .ip // empty)')"
+          applications="$(kubectl -n argocd get applications.argoproj.io --no-headers \
+            -o custom-columns=NAME:.metadata.name,NAMESPACE:.spec.destination.namespace)"
+          gateway_ip_filter='first(.status.addresses[]? | select((.type // "IPAddress") == "IPAddress") | .value) // empty'
 
           {
             printf '## Deployment endpoints\n\n'
             printf 'Cluster: `%s` | Git %s: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME"
             printf '### Argo CD\n\n'
-            if [[ -n "$argocd_ip" ]]; then
-              printf 'UI: [https://%s](https://%s)\n\n' "$argocd_ip" "$argocd_ip"
-            else
-              printf 'External IP pending. Run `kubectl -n argocd get svc argocd-server --watch`.\n\n'
-            fi
+            printf 'UI: [https://%s](https://%s)\n\n' "$argocd_ip" "$argocd_ip"
             printf '%s\n' 'Sign in as `admin`. Retrieve the initial password in your local terminal.' '' \
               '```sh' "kubectl -n argocd get secret argocd-initial-admin-secret -o go-template='{{.data.password | base64decode}}'" '```' ''
-            if [[ -n "$TODO_ENVIRONMENT" ]]; then
-              printf '### Todo App\n\nNamespace: `%s`\n\n' "$TODO_ENVIRONMENT"
-              todo_gateway_ip="$(kubectl -n "$TODO_ENVIRONMENT" get gateways.gateway.networking.k8s.io \
-                project-todo-gateway --ignore-not-found --request-timeout=15s -o 'jsonpath={.status.addresses[0].value}')"
-              if [[ -n "$todo_gateway_ip" ]]; then
-                printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
-                printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
-              else
-                printf 'After Argo CD syncs the Todo Application, run `kubectl -n %s get gateway project-todo-gateway --watch`.\n' "$TODO_ENVIRONMENT"
-              fi
-            fi
-            if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
-              exercises_gateway_ip="$(kubectl -n "$EXERCISES_NAMESPACE" get gateways.gateway.networking.k8s.io \
-                log-output-ping-pong-gateway --ignore-not-found --request-timeout=15s \
-                -o 'jsonpath={.status.addresses[0].value}')"
-              printf '\n### Log Output and Ping Pong\n\nNamespace: `%s`\n\n' "$EXERCISES_NAMESPACE"
-              if [[ -n "$exercises_gateway_ip" ]]; then
-                printf -- '- Gateway IP: `%s`\n' "$exercises_gateway_ip"
-                printf -- '- Log Output: [http://%s/](http://%s/)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
-                printf -- '- Ping Pong: [http://%s/pingpong](http://%s/pingpong)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
-              else
-                printf 'After Argo CD syncs the Application, check the Gateway with:\n\n```sh\nkubectl -n %s get gateway log-output-ping-pong-gateway\n```\n' "$EXERCISES_NAMESPACE"
-              fi
-            fi
+            while read -r app namespace; do
+              case "$app" in
+                todo-staging|todo-production)
+                  ip="$(wait_for_ip "$namespace" gateways.gateway.networking.k8s.io/project-todo-gateway "$gateway_ip_filter")"
+                  printf '### Todo App (%s)\n\n' "$namespace"
+                  printf -- '- Gateway IP: `%s`\n' "$ip"
+                  printf -- '- Todo App: [http://%s/](http://%s/)\n\n' "$ip" "$ip"
+                  ;;
+                ping-pong)
+                  ip="$(wait_for_ip "$namespace" gateways.gateway.networking.k8s.io/log-output-ping-pong-gateway "$gateway_ip_filter")"
+                  printf '### Log Output and Ping Pong\n\nNamespace: `%s`\n\n' "$namespace"
+                  printf -- '- Gateway IP: `%s`\n' "$ip"
+                  printf -- '- Log Output: [http://%s/](http://%s/)\n' "$ip" "$ip"
+                  printf -- '- Ping Pong: [http://%s/pingpong](http://%s/pingpong)\n\n' "$ip" "$ip"
+                  ;;
+              esac
+            done <<< "$applications"
             printf '\n### Grafana\n\nNamespace: `monitoring`\n\n'
             printf 'Run:\n\n```sh\nkubectl port-forward --namespace monitoring svc/grafana 3000:80\n```\n\n'
             printf 'Then open [http://localhost:3000](http://localhost:3000).\n'
