@@ -11,9 +11,9 @@ spec:
     path: the_project/manifests/overlays/staging
     kustomize:
       images:
-        - PROJECT/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project:main-fd9d77960a88d74982db6636014828d6c3395ec5
-        - TODO/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend:main-fd9d77960a88d74982db6636014828d6c3395ec5
-        - BROADCASTER/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster:main-fd9d77960a88d74982db6636014828d6c3395ec5
+        - PROJECT/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project:main-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
+        - TODO/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend:main-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
+        - BROADCASTER/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster:main-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
