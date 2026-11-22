@@ -9,6 +9,11 @@ spec:
     repoURL: https://github.com/anasfajoui/devops-with-kubernetes.git
     targetRevision: main
     path: the_project/manifests/overlays/staging
+    kustomize:
+      images:
+        - PROJECT/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project:main-d6fea47783ab6f7618392132ac5117a4f73978cb
+        - TODO/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend:main-d6fea47783ab6f7618392132ac5117a4f73978cb
+        - BROADCASTER/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster:main-d6fea47783ab6f7618392132ac5117a4f73978cb
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
