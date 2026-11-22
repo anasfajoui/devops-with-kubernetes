@@ -3,23 +3,23 @@
 - Each completed request writes one JSON log line to stdout with its timestamp, method, path, HTTP status, and duration. `POST /todos` logs also include the submitted todo, and whether it was accepted, rejected, or failed. Rejected todos include the reason and use the `warn` level.
 - The backend enforces `MAX_TODO_LENGTH=140` from the ConfigMap before accessing the database. To submit a 141-character todo through the Gateway, you may use the `requests.http` file.
 - A cronjob adds a random Wikipedia todo every hour.
-- Another CronJob backs up the todo database to Cloud Storage every day at 00:00 UTC.
+- In production, another CronJob backs up the todo database to Cloud Storage every day at 00:00 UTC.
 
 ### Todo events
 
-Successful `POST /todos` and `PUT /todos/<id>` requests publish a JSON event after PostgreSQL commits the change.
+Successful `POST /todos` and `PUT /todos/<id>` requests publish a JSON event on the environment's NATS subject after PostgreSQL commits the change.
 
 ### Deployment
 
-The Todo Argo CD Application deploys this backend, PostgreSQL, the Gateway and HTTPRoutes, and the hourly todo and daily backup CronJobs. See [the project deployment instructions](../the_project/README.md#deployment).
+The `todo-staging` and `todo-production` Argo CD Applications each deploy a backend, a PostgreSQL database and the hourly todo CronJob in their own namespace. The daily backup runs only in production. [Project deployment instructions](../the_project/README.md#deployment)
 
-Find the Gateway address:
+To find the Gateway, run the following command:
 
 ```sh
-kubectl -n project get gateway project-todo-gateway --watch
+kubectl -n <staging/production> get gateway project-todo-gateway --watch
 ```
 
-The API should be available at http://<GATEWAY_ADDRESS>/todos once the IP address is assigned.
+The API is available at `http://<GATEWAY_ADDRESS>/todos` once the IP address is assigned.
 
 ### Endpoints
 

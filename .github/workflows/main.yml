@@ -2,18 +2,6 @@ name: Release application
 
 on:
   push:
-    branches-ignore:
-      - argocd
-    paths:
-      - ".github/workflows/main.yml"
-      - "the_project/**"
-      - "todo_backend/**"
-      - "broadcaster/**"
-      - "nats/**"
-      - "log_output/**"
-      - "ping_pong/**"
-      - "monitoring/**"
-      - ".sops.yaml"
   workflow_dispatch:
 
 permissions:
@@ -44,7 +32,7 @@ env:
 jobs:
   ensure-cluster:
     name: Ensure GKE cluster is ready
-    if: github.ref_type == 'branch' && github.ref_name != 'argocd'
+    if: github.event.deleted != true
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: GKE_PROJECT
@@ -125,6 +113,7 @@ jobs:
     env:
       PROJECT_ID: ${{ secrets.GKE_PROJECT }}
       EXERCISES_NAMESPACE: ${{ github.ref_name == 'main' && 'exercises' || github.ref_name }}
+      TODO_ENVIRONMENT: ${{ github.ref_type == 'tag' && 'production' || github.ref == 'refs/heads/main' && 'staging' || '' }}
     defaults:
       run:
         shell: bash
@@ -137,6 +126,7 @@ jobs:
         run: |
           branch="$(printf '%s' "$GITHUB_REF_NAME" | sed -E 's/[^a-zA-Z0-9_.-]+/-/g; s/^[.-]+//')"
           branch="${branch:-branch}"
+          branch="${branch:0:87}"
           printf 'PROJECT_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
             "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$PROJECT_IMAGE" \
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
@@ -173,7 +163,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push The Project image
-        if: github.ref_name == 'main'
+        if: env.TODO_ENVIRONMENT != ''
         uses: docker/build-push-action@v7
         with:
           context: ./the_project
@@ -183,7 +173,7 @@ jobs:
           tags: ${{ env.PROJECT_IMAGE_TAG }}
 
       - name: Build and push Todo Backend image
-        if: github.ref_name == 'main'
+        if: env.TODO_ENVIRONMENT != ''
         uses: docker/build-push-action@v7
         with:
           context: ./todo_backend
@@ -193,7 +183,7 @@ jobs:
           tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
 
       - name: Build and push Broadcaster image
-        if: github.ref_name == 'main'
+        if: env.TODO_ENVIRONMENT != ''
         uses: docker/build-push-action@v7
         with:
           context: ./broadcaster
@@ -203,6 +193,7 @@ jobs:
           tags: ${{ env.BROADCASTER_IMAGE_TAG }}
 
       - name: Build and push Log Output writer image
+        if: github.ref_type == 'branch'
         uses: docker/build-push-action@v7
         with:
           context: ./log_output
@@ -212,6 +203,7 @@ jobs:
           tags: ${{ env.LOG_OUTPUT_WRITER_IMAGE_TAG }}
 
       - name: Build and push Log Output reader image
+        if: github.ref_type == 'branch'
         uses: docker/build-push-action@v7
         with:
           context: ./log_output
@@ -221,6 +213,7 @@ jobs:
           tags: ${{ env.LOG_OUTPUT_READER_IMAGE_TAG }}
 
       - name: Build and push Ping Pong image
+        if: github.ref_type == 'branch'
         uses: docker/build-push-action@v7
         with:
           context: ./ping_pong
@@ -353,19 +346,54 @@ jobs:
             echo "AGE_SECRET_KEY is missing from the GKE_PROJECT environment"
             exit 1
           }
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-            kubectl apply -f the_project/manifests/namespace.yaml
-            for app in todo_backend broadcaster; do
-              sops --decrypt "$app/manifests/secret.enc.yaml" | kubectl apply --server-side -n project -f -
-            done
+          apply_secret() {
+            sops --decrypt --output-type json "$1/manifests/secret.enc.yaml" \
+              | jq --arg namespace "$2" '.metadata.namespace = $namespace' \
+              | kubectl apply --server-side -f -
+          }
+          if [[ -n "$TODO_ENVIRONMENT" ]]; then
+            kubectl create namespace "$TODO_ENVIRONMENT" --dry-run=client -o yaml | kubectl apply -f -
+            apply_secret todo_backend "$TODO_ENVIRONMENT"
+            if [[ "$TODO_ENVIRONMENT" == "production" ]]; then
+              apply_secret broadcaster production
+            fi
+          fi
+          if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+            kubectl create namespace "$EXERCISES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+            apply_secret ping_pong "$EXERCISES_NAMESPACE"
           fi
 
-          kubectl create namespace "$EXERCISES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          sops --decrypt --output-type json ping_pong/manifests/secret.enc.yaml \
-            | jq --arg namespace "$EXERCISES_NAMESPACE" '.metadata.namespace = $namespace' \
-            | kubectl apply --server-side -f -
+      - name: Check out the branch for manifest updates
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_type == 'tag' && 'refs/heads/main' || github.ref }}
+          path: manifest-updates
 
-      - name: Commit application manifests for Argo CD
+      - name: Configure the Todo Application
+        if: env.TODO_ENVIRONMENT != ''
+        working-directory: manifest-updates
+        run: |
+          app="the_project/manifests/argocd/$TODO_ENVIRONMENT.yaml"
+          yq '.spec.source.kustomize.images = [
+            ("PROJECT/IMAGE=" + strenv(PROJECT_IMAGE_TAG)),
+            ("TODO/IMAGE=" + strenv(TODO_BACKEND_IMAGE_TAG)),
+            ("BROADCASTER/IMAGE=" + strenv(BROADCASTER_IMAGE_TAG))
+          ]' "$GITHUB_WORKSPACE/$app" > "$app"
+
+          if [[ "$TODO_ENVIRONMENT" == "production" ]]; then
+            backup_config="$GITHUB_WORKSPACE/todo_backend/manifests/backup-configmap.yaml"
+            BACKUP_PATCH="$(yq '.data.GCS_BUCKET = (strenv(PROJECT_ID) + "-todo-backups")' "$backup_config")"
+            export BACKUP_PATCH
+            yq -i '
+              .spec.source.targetRevision = strenv(GITHUB_REF) |
+              .spec.source.kustomize.patches[0].patch = strenv(BACKUP_PATCH)
+            ' "$app"
+          fi
+          git add -- "$app"
+
+      - name: Update Log Output and Ping Pong manifests
+        if: github.ref_type == 'branch'
+        working-directory: manifest-updates
         run: |
           (
             cd log_output
@@ -379,21 +407,24 @@ jobs:
           kustomize build log_output > /dev/null
           git add -- log_output/kustomization.yaml ping_pong/kustomization.yaml
 
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-            (cd the_project && kustomize edit set image "PROJECT/IMAGE=$PROJECT_IMAGE_TAG")
-            (cd todo_backend && kustomize edit set image "TODO/IMAGE=$TODO_BACKEND_IMAGE_TAG")
-            (cd broadcaster && kustomize edit set image "BROADCASTER/IMAGE=$BROADCASTER_IMAGE_TAG")
-            yq -i '.data.GCS_BUCKET = (strenv(PROJECT_ID) + "-todo-backups")' todo_backend/manifests/backup-configmap.yaml
-            kustomize build the_project > /dev/null
-            git add -- the_project/kustomization.yaml todo_backend/kustomization.yaml \
-              broadcaster/kustomization.yaml todo_backend/manifests/backup-configmap.yaml
-          fi
-
+      - name: Commit manifests for Argo CD
+        working-directory: manifest-updates
+        run: |
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Update application manifests for ${GITHUB_SHA:0:12}"
-          git push origin "HEAD:$GITHUB_REF_NAME"
+          git push origin HEAD
+
+      - name: Apply the Todo Application
+        if: env.TODO_ENVIRONMENT != ''
+        working-directory: manifest-updates
+        run: kubectl apply -f "the_project/manifests/argocd/$TODO_ENVIRONMENT.yaml"
+
+      - name: Apply the Log Output and Ping Pong Application
+        if: github.ref == 'refs/heads/main'
+        working-directory: manifest-updates
+        run: kubectl apply -f log_output/manifests/argocd/application.yaml
 
       - name: Deployment summary
         timeout-minutes: 16
@@ -410,12 +441,9 @@ jobs:
             sleep 20
           done
 
-          exercises_gateway_ip="$(kubectl -n "$EXERCISES_NAMESPACE" get gateways.gateway.networking.k8s.io \
-            log-output-ping-pong-gateway --ignore-not-found --request-timeout=15s \
-            -o 'jsonpath={.status.addresses[0].value}')"
           {
             printf '## Deployment endpoints\n\n'
-            printf 'Cluster: `%s` | Branch: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_NAME"
+            printf 'Cluster: `%s` | Git %s: `%s`\n\n' "$GKE_CLUSTER" "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME"
             printf '### Argo CD\n\n'
             if [[ -n "$argocd_ip" ]]; then
               printf 'UI: [https://%s](https://%s)\n\n' "$argocd_ip" "$argocd_ip"
@@ -424,23 +452,29 @@ jobs:
             fi
             printf '%s\n' 'Sign in as `admin`. Retrieve the initial password in your local terminal.' '' \
               '```sh' "kubectl -n argocd get secret argocd-initial-admin-secret -o go-template='{{.data.password | base64decode}}'" '```' ''
-            if [[ "$GITHUB_REF_NAME" == "main" ]]; then
-              printf '### Todo App\n\nNamespace: `project`\n\n'
-              todo_gateway_ip="$(kubectl -n project get gateways.gateway.networking.k8s.io \
+            if [[ -n "$TODO_ENVIRONMENT" ]]; then
+              printf '### Todo App\n\nNamespace: `%s`\n\n' "$TODO_ENVIRONMENT"
+              todo_gateway_ip="$(kubectl -n "$TODO_ENVIRONMENT" get gateways.gateway.networking.k8s.io \
                 project-todo-gateway --ignore-not-found --request-timeout=15s -o 'jsonpath={.status.addresses[0].value}')"
               if [[ -n "$todo_gateway_ip" ]]; then
                 printf -- '- Gateway IP: `%s`\n' "$todo_gateway_ip"
                 printf -- '- Todo App: [http://%s/](http://%s/)\n' "$todo_gateway_ip" "$todo_gateway_ip"
               else
-                printf 'After Argo CD syncs the Todo Application, run `kubectl -n project get gateway project-todo-gateway --watch`.\n'
+                printf 'After Argo CD syncs the Todo Application, run `kubectl -n %s get gateway project-todo-gateway --watch`.\n' "$TODO_ENVIRONMENT"
               fi
             fi
-            printf '\n### Ping Pong\n\nNamespace: `%s`\n\n' "$EXERCISES_NAMESPACE"
-            if [[ -n "$exercises_gateway_ip" ]]; then
-              printf -- '- Gateway IP: `%s`\n' "$exercises_gateway_ip"
-              printf -- '- Ping Pong app: [http://%s/](http://%s/)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
-            else
-              printf 'After Argo CD syncs the Application, check the Gateway with:\n\n```sh\nkubectl -n %s get gateway log-output-ping-pong-gateway\n```\n' "$EXERCISES_NAMESPACE" 
+            if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+              exercises_gateway_ip="$(kubectl -n "$EXERCISES_NAMESPACE" get gateways.gateway.networking.k8s.io \
+                log-output-ping-pong-gateway --ignore-not-found --request-timeout=15s \
+                -o 'jsonpath={.status.addresses[0].value}')"
+              printf '\n### Log Output and Ping Pong\n\nNamespace: `%s`\n\n' "$EXERCISES_NAMESPACE"
+              if [[ -n "$exercises_gateway_ip" ]]; then
+                printf -- '- Gateway IP: `%s`\n' "$exercises_gateway_ip"
+                printf -- '- Log Output: [http://%s/](http://%s/)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
+                printf -- '- Ping Pong: [http://%s/pingpong](http://%s/pingpong)\n' "$exercises_gateway_ip" "$exercises_gateway_ip"
+              else
+                printf 'After Argo CD syncs the Application, check the Gateway with:\n\n```sh\nkubectl -n %s get gateway log-output-ping-pong-gateway\n```\n' "$EXERCISES_NAMESPACE"
+              fi
             fi
             printf '\n### Grafana\n\nNamespace: `monitoring`\n\n'
             printf 'Run:\n\n```sh\nkubectl port-forward --namespace monitoring svc/grafana 3000:80\n```\n\n'

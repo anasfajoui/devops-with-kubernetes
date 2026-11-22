@@ -13,12 +13,15 @@ jobs:
   publish:
     name: Publish exercise release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
 
     steps:
       - name: Check out pushed commit
         uses: actions/checkout@v6
 
       - name: Create releases for completed exercises
+        id: release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,3 +60,19 @@ jobs:
             --target "$COMMIT_SHA" \
             --title "$exercise" \
             --notes "$exercise_title"
+          echo "tag=$exercise" >> "$GITHUB_OUTPUT"
+
+  deploy-production:
+    name: Trigger production deployment
+    needs: publish
+    if: needs.publish.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run the deployment workflow at the new tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: gh workflow run main.yml --ref "$TAG"

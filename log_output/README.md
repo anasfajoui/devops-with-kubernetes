@@ -11,20 +11,13 @@
 
 ### Deployment
 
-The workflow builds and pushes the Log output reader, writer and Ping-pong images, then commits their image tags. Argo CD watches the `log_output` Kustomization, which includes Ping-pong, PostgreSQL, the Gateway and both Argo Rollouts. The workflow provisions the Ping-pong database Secret from SOPS in the destination namespace. [Release application workflow](../.github/workflows/main.yml)
+On a push to `main`, the workflow builds the Log Output reader, writer and Ping-pong images, pushes them to the registry, and commits their tags. It provisions the Ping-pong database Secret from SOPS and applies the `log-output` Argo CD Application. [Release application workflow](../.github/workflows/main.yml)
 
-After the first successful workflow run on a fresh cluster, open the Argo CD HTTPS address in the workflow summary. Sign in as `admin` and retrieve the initial password with your kubectl context set to the GKE cluster.
+To view the Application, open the Argo CD HTTPS address in the workflow summary and select **ping-pong** after signing in. For the first sign-in, use `admin` and retrieve the initial password with your kubectl context set to the GKE cluster.
 
 ```sh
 kubectl -n argocd get secret argocd-initial-admin-secret -o go-template='{{.data.password | base64decode}}'
 ```
-
-In **New App**, use these settings for main:
-
-- Application name `log-output`, project `default`, sync policy **Automatic**.
-- Repository URL `https://github.com/anasfajoui/devops-with-kubernetes.git`, revision `HEAD`, path `log_output`.
-- Destination cluster `https://kubernetes.default.svc`, namespace `exercises`.
-- Click **Create**.
 
 ### Gateway address
 

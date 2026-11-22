@@ -18,20 +18,26 @@ const requirePositiveIntegerEnv = name => {
 }
 
 const PORT = requirePositiveIntegerEnv('PORT')
-const WEBHOOK_TIMEOUT_MS = requirePositiveIntegerEnv('WEBHOOK_TIMEOUT_MS')
 const NATS_URL = requireEnv('NATS_URL')
 const NATS_SUBJECT = requireEnv('NATS_SUBJECT')
 const NATS_QUEUE_GROUP = requireEnv('NATS_QUEUE_GROUP')
 const INSTANCE = process.env.HOSTNAME || `broadcaster-${process.pid}`
-const DISCORD_WEBHOOK_URL = requireEnv('DISCORD_WEBHOOK_URL')
+const BROADCASTER_MODE = process.env.BROADCASTER_MODE || 'discord'
 
 let webhookUrl
-try {
-  webhookUrl = new URL(DISCORD_WEBHOOK_URL)
-  if (!['http:', 'https:'].includes(webhookUrl.protocol)) throw new Error()
-  webhookUrl.searchParams.set('wait', 'true')
-} catch {
-  throw new Error('DISCORD_WEBHOOK_URL must be an HTTP or HTTPS URL')
+let webhookTimeoutMs
+if (BROADCASTER_MODE === 'discord') {
+  webhookTimeoutMs = requirePositiveIntegerEnv('WEBHOOK_TIMEOUT_MS')
+  const url = requireEnv('DISCORD_WEBHOOK_URL')
+  try {
+    webhookUrl = new URL(url)
+    if (!['http:', 'https:'].includes(webhookUrl.protocol)) throw new Error()
+    webhookUrl.searchParams.set('wait', 'true')
+  } catch {
+    throw new Error('DISCORD_WEBHOOK_URL must be an HTTP or HTTPS URL')
+  }
+} else if (BROADCASTER_MODE !== 'log') {
+  throw new Error('BROADCASTER_MODE must be discord or log')
 }
 
 let connection
@@ -63,7 +69,12 @@ const isTodoEvent = event =>
   event.todo && typeof event.todo.id === 'string' &&
   typeof event.todo.todo === 'string' && typeof event.todo.done === 'boolean'
 
-const forward = async message => {
+const handleMessage = async message => {
+  if (BROADCASTER_MODE === 'log') {
+    log('nats_message', { subject: message.subject, message: message.string() })
+    return
+  }
+
   let event
   try {
     event = message.json()
@@ -87,7 +98,7 @@ const forward = async message => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
       redirect: 'error',
-      signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+      signal: AbortSignal.timeout(webhookTimeoutMs),
     })
     await response.body?.cancel()
     log(response.ok ? 'notification_forwarded' : 'notification_dropped', {
@@ -146,7 +157,7 @@ const main = async () => {
 
   subscription = connection.subscribe(NATS_SUBJECT, { queue: NATS_QUEUE_GROUP })
   consumption = (async () => {
-    for await (const message of subscription) await forward(message)
+    for await (const message of subscription) await handleMessage(message)
   })()
   consumption.catch(() => {
     ready = false

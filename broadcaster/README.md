@@ -13,6 +13,8 @@ Events have this shape:
 
 Both `todo.created` and `todo.updated` are supported.
 
+In staging, `BROADCASTER_MODE=log` writes each received NATS message and its subject to stdout. In production, the default `discord` mode sends todo events to `DISCORD_WEBHOOK_URL` and uses `WEBHOOK_TIMEOUT_MS` for the request timeout.
+
 ### Endpoints
 
 - `GET /healthz` returns 200 when the HTTP server responds, independently of NATS.
@@ -21,7 +23,7 @@ Both `todo.created` and `todo.updated` are supported.
 To use [requests.http](requests.http), forward a broadcaster Pod's port:
 
 ```sh
-kubectl -n project port-forward deployment/broadcaster-dep 8080:8080
+kubectl -n <staging/production> port-forward deployment/broadcaster-dep 8080:8080
 ```
 
 On shutdown, the process stops accepting NATS messages and drains work for up to ten seconds.

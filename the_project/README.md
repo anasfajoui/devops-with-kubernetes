@@ -5,29 +5,24 @@
 - "Mark done" button sends `PUT /todos/<id>` with `{ "done": true }`. 
 - The random image is persistently cached.
 - The "Break the app" button stops normal operation until the liveness probe restarts the frontend container.
-- Creating or updating a todo publishes an event to NATS. One of the six [broadcaster](../broadcaster/) replicas forwards it to Discord.
+- Creating or updating a todo publishes an event on the environment's NATS subject. One of the six broadcaster replicas logs the message in staging or forwards it to Discord in production.
 
 ### Deployment
 
-On pushes to `main`, the workflow builds and publishes the frontend, backend and broadcaster images. It commits their new image tags and the database backup bucket name to Git. Argo CD watches `the_project` and syncs the Todo resources into the `project` namespace. [Release application workflow](../.github/workflows/main.yml)
+- Each push to `main` deploys to `staging`. The `todo-staging` Application follows the staging overlay on `main`. [Staging Application](manifests/argocd/staging.yaml)
+- Each Git tag deploys to `production`. The `todo-production` Application reads the production overlay from that exact tag. [Production Application](manifests/argocd/production.yaml)
 
-After the first successful workflow, open the Argo CD URL in the workflow summary. Sign in as `admin` using the password retrieval command in that summary. In **New App**, enter these settings and select **Create**.
+Production notifications go to the *#todo-updates* channel on the [Kube Lab Discord server](https://discord.gg/RQgXHufrcQ). In staging, inspect the broadcaster logs with `kubectl -n staging logs -l app=broadcaster --prefix`. NATS metrics are available in Grafana. [Monitoring](../monitoring/README.md)
 
-- Application name `todo`, project `default`, sync policy **Automatic**.
-- Repository URL `https://github.com/anasfajoui/devops-with-kubernetes.git`, revision `HEAD`, path `the_project`.
-- Destination cluster `https://kubernetes.default.svc`, namespace `project`.
-
-Notifications go to [Kube Lab](https://discord.gg/RQgXHufrcQ) Discord server, under the *# todo-updates* Text Channel.
-
-NATS metrics are available in Grafana after deployment; see [monitoring](../monitoring/README.md).
-
-After Argo CD syncs the application, find the Gateway address.
+After Argo CD syncs the Applications, each environment has its own Gateway address.
 
 ```sh
-kubectl -n project get gateway project-todo-gateway --watch
+kubectl -n <staging/production> get gateway project-todo-gateway
 ```
 
-The app should be available at http://<GATEWAY_ADDRESS>/ once the IP address is assigned. The workflow summary also displays this address.
+Open `http://<GATEWAY_ADDRESS>/` for the environment you want to use.
+
+To view the Application, open the Argo CD HTTPS address in the workflow summary and select **todo-production** or **todo-staging** after signing in. For the first sign-in, use `admin` and retrieve the initial password with your kubectl context set to the GKE cluster.
 
 ### Endpoints
 
@@ -49,7 +44,7 @@ The app should be available at http://<GATEWAY_ADDRESS>/ once the IP address is 
 
 ### Daily DB backups
 
-The backup CronJob uses `pg_dump` to write a plain SQL dump into a shared temporary volume. Once the dump succeeds, the upload container sends the completed file to Cloud Storage with `gcloud storage cp`. A failed dump prevents the upload container from starting.
+The production backup CronJob uses `pg_dump` to write a plain SQL dump into a shared temporary volume. Once the dump succeeds, the upload container sends the completed file to Cloud Storage with `gcloud storage cp`. A failed dump prevents the upload container from starting.
 
 #### GCP one-time setup
 
@@ -58,14 +53,14 @@ The backup CronJob uses `pg_dump` to write a plain SQL dump into a shared tempor
 ```sh
 PROJECT_ID="<PROJECT_ID>"
 BUCKET_NAME="${PROJECT_ID}-todo-backups"
-NAMESPACE="project"
+NAMESPACE="production"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
 
 gcloud container clusters get-credentials dwk-cluster \
   --zone=europe-west1-b --project="$PROJECT_ID"
 ```
 
-2. Create the bucket and grant access to the backup ServiceAccount in the selected namespace:
+2. Create the bucket and grant access to the `todo-db-backup` ServiceAccount in the `production` namespace.
 
 ```sh
 gcloud storage buckets create "gs://$BUCKET_NAME" \

@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: production
+resources:
+  - ../../base
+  - ../../../../todo_backend/manifests
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: todo-backend-config|broadcaster-config
+    patch: |-
+      - op: replace
+        path: /data/NATS_SUBJECT
+        value: todos.production.events

@@ -10,7 +10,7 @@ The Gateway accepts `GET /pingpong` and rewrites its path to `/` before forwardi
 
 ### Deployment
 
-The Log output Argo CD Application also deploys Ping-pong and its PostgreSQL StatefulSet. Follow the [Log output deployment instructions](../log_output/README.md#deployment) to set up automatic sync.
+The workflow creates the shared `log-output` Argo CD Application on a push to `main`. It automatically syncs Ping-pong and its PostgreSQL StatefulSet to the `exercises` namespace alongside Log Output. [Log Output deployment](../log_output/README.md#deployment)
 
 ### Gateway address
 

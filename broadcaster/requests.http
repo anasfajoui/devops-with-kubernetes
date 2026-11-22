@@ -1,4 +1,4 @@
-# kubectl -n project port-forward deployment/broadcaster-dep 8080:8080
+# kubectl -n <staging/production> port-forward deployment/broadcaster-dep 8080:8080
 @baseUrl = http://localhost:8080
 
 ### Check liveness
