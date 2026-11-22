@@ -4,7 +4,3 @@ kind: Kustomization
 resources:
 - manifests/configmap.yaml
 - manifests/deployment.yaml
-images:
-- name: BROADCASTER/IMAGE
-  newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster
-  newTag: main-3a2e2f4398cd9ea041a63f9f5beff4def1d44dac
