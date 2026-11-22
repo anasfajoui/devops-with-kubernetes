@@ -13,4 +13,4 @@ resources:
 images:
 - name: PING/PONG
   newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/ping-pong
-  newTag: main-d6fea47783ab6f7618392132ac5117a4f73978cb
+  newTag: main-0dc8f304755dadbe2087bf77b5f7c2c858ecd406
