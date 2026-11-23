@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/anasfajoui/devops-with-kubernetes.git
-    targetRevision: f36d53fc0f561dff285ef700a0a7245f23221e9b
+    targetRevision: 5ce33301dad15df59a794506dbe7c34cb6bfebe8
     path: the_project/manifests/overlays/production
     kustomize:
       images:
