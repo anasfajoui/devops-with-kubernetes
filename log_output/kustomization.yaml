@@ -13,7 +13,7 @@ resources:
 images:
 - name: LOG/READER
   newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/log-output-reader
-  newTag: main-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
+  newTag: main-ad4f87556edd243e9c1364892a5a5ed215c54236
 - name: LOG/WRITER
   newName: europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/log-output-writer
-  newTag: main-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
+  newTag: main-ad4f87556edd243e9c1364892a5a5ed215c54236
