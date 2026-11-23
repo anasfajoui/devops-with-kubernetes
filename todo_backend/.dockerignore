@@ -1,6 +1,0 @@
-# Ignore the Dockerfile and the K8s manifest files
-Dockerfile*
-manifests
-node_modules
-npm-debug.log
-README.md

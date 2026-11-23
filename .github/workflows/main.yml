@@ -3,6 +3,18 @@ name: Release application
 on:
   push:
   workflow_dispatch:
+    inputs:
+      todo_commit:
+        description: Todo source commit to build (leave empty to deploy configuration only)
+        type: string
+        required: false
+      todo_environment:
+        description: Destination for the Todo source build
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
 
 permissions:
   contents: read
@@ -113,7 +125,9 @@ jobs:
     env:
       PROJECT_ID: ${{ secrets.GKE_PROJECT }}
       EXERCISES_NAMESPACE: ${{ github.ref_name == 'main' && 'exercises' || github.ref_name }}
-      TODO_ENVIRONMENT: ${{ github.ref_type == 'tag' && 'production' || github.ref == 'refs/heads/main' && 'staging' || '' }}
+      TODO_COMMIT: ${{ inputs.todo_commit }}
+      TODO_ENVIRONMENT: ${{ inputs.todo_commit && inputs.todo_environment || github.ref_type == 'tag' && 'production' || github.ref == 'refs/heads/main' && 'staging' || '' }}
+      BUILD_EXERCISES: ${{ github.ref_type == 'branch' && !inputs.todo_commit }}
     defaults:
       run:
         shell: bash
@@ -122,20 +136,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check out the Todo source commit
+        if: env.TODO_COMMIT != ''
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.TODO_CODE_REPOSITORY || format('{0}/todo-app', github.repository_owner) }}
+          ref: ${{ env.TODO_COMMIT }}
+          token: ${{ secrets.TODO_CODE_READ_TOKEN || github.token }}
+          persist-credentials: false
+          path: todo-source
+
       - name: Form the image tags
         run: |
           branch="$(printf '%s' "$GITHUB_REF_NAME" | sed -E 's/[^a-zA-Z0-9_.-]+/-/g; s/^[.-]+//')"
           branch="${branch:-branch}"
           branch="${branch:0:87}"
-          printf 'PROJECT_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
-            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$PROJECT_IMAGE" \
-            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
-          printf 'TODO_BACKEND_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
-            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$TODO_BACKEND_IMAGE" \
-            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
-          printf 'BROADCASTER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
-            "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$BROADCASTER_IMAGE" \
-            "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
+          if [[ -n "$TODO_COMMIT" ]]; then
+            source_sha="$(git -C todo-source rev-parse HEAD)"
+            if [[ "$source_sha" != "$TODO_COMMIT" ]]; then
+              echo "Expected a full Todo commit SHA, got $TODO_COMMIT" >&2
+              exit 1
+            fi
+            registry_path="$REGISTRY/$PROJECT_ID/$REPOSITORY"
+            tag="$TODO_ENVIRONMENT-$source_sha"
+            echo "PROJECT_IMAGE_TAG=$registry_path/$PROJECT_IMAGE:$tag" >> "$GITHUB_ENV"
+            echo "TODO_BACKEND_IMAGE_TAG=$registry_path/$TODO_BACKEND_IMAGE:$tag" >> "$GITHUB_ENV"
+            echo "BROADCASTER_IMAGE_TAG=$registry_path/$BROADCASTER_IMAGE:$tag" >> "$GITHUB_ENV"
+          fi
           printf 'LOG_OUTPUT_WRITER_IMAGE_TAG=%s/%s/%s/%s:%s-%s\n' \
             "$REGISTRY" "$PROJECT_ID" "$REPOSITORY" "$LOG_OUTPUT_WRITER_IMAGE" \
             "$branch" "$GITHUB_SHA" >> "$GITHUB_ENV"
@@ -163,37 +190,34 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push The Project image
-        if: env.TODO_ENVIRONMENT != ''
+        if: env.TODO_COMMIT != ''
         uses: docker/build-push-action@v7
         with:
-          context: ./the_project
-          file: ./the_project/Dockerfile
+          context: ./todo-source/the_project
           push: true
           provenance: false
           tags: ${{ env.PROJECT_IMAGE_TAG }}
 
       - name: Build and push Todo Backend image
-        if: env.TODO_ENVIRONMENT != ''
+        if: env.TODO_COMMIT != ''
         uses: docker/build-push-action@v7
         with:
-          context: ./todo_backend
-          file: ./todo_backend/Dockerfile
+          context: ./todo-source/todo_backend
           push: true
           provenance: false
           tags: ${{ env.TODO_BACKEND_IMAGE_TAG }}
 
       - name: Build and push Broadcaster image
-        if: env.TODO_ENVIRONMENT != ''
+        if: env.TODO_COMMIT != ''
         uses: docker/build-push-action@v7
         with:
-          context: ./broadcaster
-          file: ./broadcaster/Dockerfile
+          context: ./todo-source/broadcaster
           push: true
           provenance: false
           tags: ${{ env.BROADCASTER_IMAGE_TAG }}
 
       - name: Build and push Log Output writer image
-        if: github.ref_type == 'branch'
+        if: env.BUILD_EXERCISES == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./log_output
@@ -203,7 +227,7 @@ jobs:
           tags: ${{ env.LOG_OUTPUT_WRITER_IMAGE_TAG }}
 
       - name: Build and push Log Output reader image
-        if: github.ref_type == 'branch'
+        if: env.BUILD_EXERCISES == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./log_output
@@ -213,7 +237,7 @@ jobs:
           tags: ${{ env.LOG_OUTPUT_READER_IMAGE_TAG }}
 
       - name: Build and push Ping Pong image
-        if: github.ref_type == 'branch'
+        if: env.BUILD_EXERCISES == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./ping_pong
@@ -358,7 +382,7 @@ jobs:
               apply_secret broadcaster production
             fi
           fi
-          if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+          if [[ "$BUILD_EXERCISES" == "true" ]]; then
             kubectl create namespace "$EXERCISES_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
             apply_secret ping_pong "$EXERCISES_NAMESPACE"
           fi
@@ -374,25 +398,27 @@ jobs:
         working-directory: manifest-updates
         run: |
           app="the_project/manifests/argocd/$TODO_ENVIRONMENT.yaml"
-          yq '.spec.source.kustomize.images = [
-            ("PROJECT/IMAGE=" + strenv(PROJECT_IMAGE_TAG)),
-            ("TODO/IMAGE=" + strenv(TODO_BACKEND_IMAGE_TAG)),
-            ("BROADCASTER/IMAGE=" + strenv(BROADCASTER_IMAGE_TAG))
-          ]' "$GITHUB_WORKSPACE/$app" > "$app"
+          if [[ -n "$TODO_COMMIT" ]]; then
+            yq -i '.spec.source.kustomize.images = [
+              ("PROJECT/IMAGE=" + strenv(PROJECT_IMAGE_TAG)),
+              ("TODO/IMAGE=" + strenv(TODO_BACKEND_IMAGE_TAG)),
+              ("BROADCASTER/IMAGE=" + strenv(BROADCASTER_IMAGE_TAG))
+            ]' "$app"
+          fi
 
           if [[ "$TODO_ENVIRONMENT" == "production" ]]; then
             backup_config="$GITHUB_WORKSPACE/todo_backend/manifests/backup-configmap.yaml"
             BACKUP_PATCH="$(yq '.data.GCS_BUCKET = (strenv(PROJECT_ID) + "-todo-backups")' "$backup_config")"
             export BACKUP_PATCH
             yq -i '
-              .spec.source.targetRevision = strenv(GITHUB_REF) |
+              .spec.source.targetRevision = strenv(GITHUB_SHA) |
               .spec.source.kustomize.patches[0].patch = strenv(BACKUP_PATCH)
             ' "$app"
           fi
           git add -- "$app"
 
       - name: Update Log Output and Ping Pong manifests
-        if: github.ref_type == 'branch'
+        if: env.BUILD_EXERCISES == 'true'
         working-directory: manifest-updates
         run: |
           (
@@ -413,7 +439,8 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "Update application manifests for ${GITHUB_SHA:0:12}"
+          source_commit="${TODO_COMMIT:-$GITHUB_SHA}"
+          git commit -m "Update application manifests for ${source_commit:0:12}"
           git push origin HEAD
 
       - name: Apply the Todo Application
@@ -422,7 +449,7 @@ jobs:
         run: kubectl apply -f "the_project/manifests/argocd/$TODO_ENVIRONMENT.yaml"
 
       - name: Apply the Log Output and Ping Pong Application
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && env.BUILD_EXERCISES == 'true'
         working-directory: manifest-updates
         run: kubectl apply -f log_output/manifests/argocd/application.yaml
 

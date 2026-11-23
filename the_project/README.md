@@ -9,8 +9,11 @@
 
 ### Deployment
 
-- Each push to `main` deploys to `staging`. The `todo-staging` Application follows the staging overlay on `main`. [Staging Application](manifests/argocd/staging.yaml)
-- Each Git tag deploys to `production`. The `todo-production` Application reads the production overlay from that exact tag. [Production Application](manifests/argocd/production.yaml)
+The Todo source repository contains the frontend, backend, broadcaster and their Dockerfiles. This repository holds the Kubernetes manifests and Argo CD Applications. A push to the source repository triggers the deployment workflow on the configuration repository’s `main` branch. [Deployment workflow](../.github/workflows/main.yml)
+
+- A push to the source repository’s `main` deploys to `staging`.
+- A tag in the source repository deploys that source commit to `production`
+- An exercise release tag in this configuration repository deploys the tagged configuration using the image references currently recorded for production.
 
 Production notifications go to the *#todo-updates* channel on the [Kube Lab Discord server](https://discord.gg/RQgXHufrcQ). In staging, inspect the broadcaster logs with `kubectl -n staging logs -l app=broadcaster --prefix`. NATS metrics are available in Grafana. [Monitoring](../monitoring/README.md)
 

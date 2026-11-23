@@ -20,7 +20,7 @@ In staging, `BROADCASTER_MODE=log` writes each received NATS message and its sub
 - `GET /healthz` returns 200 when the HTTP server responds, independently of NATS.
 - `GET /readyz` returns 200 when connected to NATS with the subscription registered, otherwise 503.
 
-To use [requests.http](requests.http), forward a broadcaster Pod's port:
+To use `broadcaster/requests.http` in the Todo source repository, forward a broadcaster Pod's port.
 
 ```sh
 kubectl -n <staging/production> port-forward deployment/broadcaster-dep 8080:8080

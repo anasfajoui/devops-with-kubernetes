@@ -1,7 +1,7 @@
 ## Todo Backend
 
 - Each completed request writes one JSON log line to stdout with its timestamp, method, path, HTTP status, and duration. `POST /todos` logs also include the submitted todo, and whether it was accepted, rejected, or failed. Rejected todos include the reason and use the `warn` level.
-- The backend enforces `MAX_TODO_LENGTH=140` from the ConfigMap before accessing the database. To submit a 141-character todo through the Gateway, you may use the `requests.http` file.
+- The backend enforces `MAX_TODO_LENGTH=140` from the ConfigMap before accessing the database. To submit a 141-character todo through the Gateway, use `todo_backend/requests.http` in the Todo source repository.
 - A cronjob adds a random Wikipedia todo every hour.
 - In production, another CronJob backs up the todo database to Cloud Storage every day at 00:00 UTC.
 
