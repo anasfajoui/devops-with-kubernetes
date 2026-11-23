@@ -55,3 +55,4 @@
 - [4.7. Baby steps to GitOps](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.7/log_output)
 - [4.8. The project, step 24](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.8/the_project)
 - [4.9. The project, step 25](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.9/the_project)
+- [4.10. The project, the grande finale](https://github.com/anasfajoui/devops-with-kubernetes/tree/4.10/the_project)
