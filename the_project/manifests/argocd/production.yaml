@@ -7,13 +7,13 @@ spec:
   project: default
   source:
     repoURL: https://github.com/anasfajoui/devops-with-kubernetes.git
-    targetRevision: refs/tags/4.9
+    targetRevision: f36d53fc0f561dff285ef700a0a7245f23221e9b
     path: the_project/manifests/overlays/production
     kustomize:
       images:
-        - PROJECT/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project:4.9-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
-        - TODO/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend:4.9-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
-        - BROADCASTER/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster:4.9-dce34a8fb0e11c4ebf64d430248e2f75587e44f4
+        - PROJECT/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/the-project:production-98871319056813391f885575e56bf416099ea91a
+        - TODO/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/todo-backend:production-98871319056813391f885575e56bf416099ea91a
+        - BROADCASTER/IMAGE=europe-west1-docker.pkg.dev/dwk-gke-510521/dwk-repository/broadcaster:production-98871319056813391f885575e56bf416099ea91a
       patches:
         - patch: |-
             apiVersion: v1
