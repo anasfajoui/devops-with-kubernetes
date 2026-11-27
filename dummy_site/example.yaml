@@ -1,0 +1,6 @@
+apiVersion: dwk.dev/v1
+kind: DummySite
+metadata:
+  name: example
+spec:
+  website_url: https://example.com/
